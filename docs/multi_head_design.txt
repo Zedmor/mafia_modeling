@@ -1,0 +1,137 @@
+Creating an `Action` class with subclasses for each specific action type is a good object-oriented approach to model the different actions in the game. This will allow you to encapsulate the logic for each action type and handle them polymorphically.
+
+Regarding the different "space" requirements for each action, you can design each `Action` subclass to have its own serialization method that outputs the appropriate number of bits for that action. The `ActionVector` will then be a collection of these serialized actions, and you can concatenate them to form the complete vector.
+
+Here's an example of how you might structure the `Action` classes:
+
+<=======================================
+from abc import ABC, abstractmethod
+
+class Action(ABC):
+    @abstractmethod
+    def serialize(self):
+        pass
+
+    @abstractmethod
+    def apply(self, game_state: GameState):
+        pass
+
+class BeliefAction(Action):
+    def __init__(self, beliefs):
+        self.beliefs = beliefs  # A list of beliefs about each player's team
+
+    def serialize(self):
+        # Serialize the beliefs into a bit vector
+        bits_per_player = len(Team)
+        serialized_beliefs = np.zeros(MAX_PLAYERS * bits_per_player)
+        for i, belief in enumerate(self.beliefs):
+            serialized_beliefs[i * bits_per_player + belief.value] = 1
+        return serialized_beliefs
+
+    def apply(self, game_state: GameState):
+        # Apply the belief action to the game state
+        pass
+
+class KillAction(Action):
+    def __init__(self, target_player):
+        self.target_player = target_player
+
+    def serialize(self):
+        # Serialize the kill action into a bit vector
+        serialized_kill = np.zeros(MAX_PLAYERS)
+        serialized_kill[self.target_player] = 1
+        return serialized_kill
+
+    def apply(self, game_state: GameState):
+        # Apply the kill action to the game state
+        pass
+
+# Other action subclasses would be defined similarly...
+=======================================>
+
+
+Now, you can update the `ActionVector` class to handle a list of `Action` objects:
+
+<=======================================
+class ActionVector:
+    def __init__(self):
+        self.actions = []
+
+    def add_action(self, action: Action):
+        self.actions.append(action)
+
+    def serialize(self):
+        # Serialize each action and concatenate them
+        serialized_actions = np.concatenate([action.serialize() for action in self.actions])
+        return serialized_actions
+
+    def apply_to_game_state(self, game_state: GameState):
+        # Apply each action to the game state
+        for action in self.actions:
+            action.apply(game_state)
+        return game_state
+=======================================>
+
+
+To accommodate actions with different "space" requirements, the `ActionVector` will be a concatenation of the serialized actions. When you deserialize the `ActionVector`, you'll need to know the structure of the vector to parse it correctly and reconstruct the individual actions.
+
+In your neural network output, you can have separate heads for each action type, each outputting the appropriate number of bits. You would then construct the `Action` objects from these outputs and add them to the `ActionVector`.
+
+Remember that this is a simplified example, and you'll need to implement the logic for serializing, deserializing, and applying each action type based on the rules of your game. You'll also need to handle the masking of invalid actions and integrate this system with your reinforcement learning loop.
+
+>>>So separate head is a separate output with different vector sizes?
+
+
+Yes, in neural network terminology, a "head" typically refers to a separate output layer or a set of neurons that are responsible for a specific task or set of tasks. In the context of reinforcement learning for a game like Mafia, you could have separate heads for each type of action, with each head outputting a vector of a different size corresponding to the action space for that action type.
+
+For example, you might have a neural network with the following heads:
+
+1. **Belief Head**: Outputs a probability distribution over teams (UNKNOWN, BLACK_TEAM, RED_TEAM) for each player. This would be a vector of size `MAX_PLAYERS * len(Team)`.
+
+2. **Kill Head**: Outputs a probability distribution over potential targets for a kill action. This would be a vector of size `MAX_PLAYERS`.
+
+3. **Nomination Head**: Outputs a probability distribution over potential nominations for voting. This would also be a vector of size `MAX_PLAYERS`.
+
+4. **Sheriff Check Head**: Outputs a probability distribution over players that the Sheriff might want to check. This would be a vector of size `MAX_PLAYERS`.
+
+Each head would be trained to perform its specific task, and the outputs of these heads would be used to construct the corresponding actions. During the action selection phase, you would apply masks to these outputs to ensure that only valid actions are considered. For example, you would mask out any kill actions targeting already eliminated players, or mask out any Sheriff checks on players who have already been checked.
+
+Here's a simplified example of how you might structure the neural network with multiple heads:
+
+<=======================================
+import torch
+import torch.nn as nn
+
+class MafiaNN(nn.Module):
+    def __init__(self, input_size, num_players):
+        super(MafiaNN, self).__init__()
+        self.shared_layers = nn.Sequential(
+            nn.Linear(input_size, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU()
+        )
+        self.belief_head = nn.Linear(128, num_players * len(Team))
+        self.kill_head = nn.Linear(128, num_players)
+        self.nomination_head = nn.Linear(128, num_players)
+        self.sheriff_check_head = nn.Linear(128, num_players)
+
+    def forward(self, x):
+        shared_output = self.shared_layers(x)
+        belief_output = self.belief_head(shared_output)
+        kill_output = self.kill_head(shared_output)
+        nomination_output = self.nomination_head(shared_output)
+        sheriff_check_output = self.sheriff_check_head(shared_output)
+        return belief_output, kill_output, nomination_output, sheriff_check_output
+
+# Example usage:
+num_players = 10
+input_size = 100  # Example input size
+model = MafiaNN(input_size, num_players)
+game_state_input = torch.randn(1, input_size)  # Example game state input
+
+belief_output, kill_output, nomination_output, sheriff_check_output = model(game_state_input)
+=======================================>
+
+
+In this example, `belief_output`, `kill_output`, `nomination_output`, and `sheriff_check_output` are the separate heads of the neural network, each providing a different set of action probabilities. You would then use these outputs to construct the `ActionVector` and apply the appropriate masks before selecting an action.

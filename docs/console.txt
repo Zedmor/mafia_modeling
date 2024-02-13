@@ -1,0 +1,10 @@
+ now I want to write console app for this.
+
+   What this console app will do:
+
+   1. It will be interactive, player will navigate between rows and columns in the table for each player with the cursor and in this 2d table player can put in the cells of that table either +, - (suspicion, low strength belief - 0.3), or ++,-- (high suspicion belief - 0.6) or +++ or --- maximum level of suspicion, sheriff check (player declares he is a sheriff and made that check).
+
+   2. This app will always print 2d matrix below matrix where player can make those updates. That matrix will be calculated using create_belief_matrix() function
+
+   3. Output will be colorized when belief is > 0.5 or <-0.5 cells will be either green or red.
+

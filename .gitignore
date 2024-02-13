@@ -5,13 +5,19 @@ __pycache__/
 # C extensions
 *.so
 
+# Model Weights
+*.pth
+
 # Distribution / packaging
+.idea/
 bin/
 build/
 develop-eggs/
 dist/
 eggs/
 lib/
+src/mafia_game/logs
+logs/
 lib64/
 parts/
 sdist/

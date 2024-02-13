@@ -1,0 +1,80 @@
+Mafia game rules:
+
+Mafia Game description:
+
+Game is played with 10 players, players are getting roles at random.
+
+At the beginning of the game there's 3 players who gets Black cards (1 Don and 2 Mafia) and 7 players get Red cards
+(6 Citizen card and 1 Sheriff card).
+
+One team is playing against each other.
+Three black players knows each other and red players do not know who is red and who is black.
+
+Game is played with phases - "Day" and "Night". During day phase players are stating their position
+ and make declarations, as well as put other player to the vote. Game starts with the day and player 1 making his statement.
+
+Type of declarations players make (for this model):
+
+1. "I think player X is a red player"
+2. "I think player Y is a black player"
+3. I am sheriff and checked player Z and he is black
+4. I am sheriff and checked player M and he is red.
+5. I am putting player K on the vote
+
+Player can make as many declarations as he like (up to 9 declarations on the possible opinion and sheriff checks has to be believable
+(if there's only two nights and player states has 3 checks that is suspicious)
+
+This information is available to all the players.
+
+After day round of more than 1 players are been put to the vote, players vote and if one player gets majority he is eliminated from the game.
+Eliminated player has opportunity to state his position.
+
+During night Don decide who to kill in the game and that player is getting eliminated. If Don is not in the game first Mafia decides who to kill,
+if only one mafia left, that player decides who to kill.
+
+Then Don of the game if he is in the game can check if certain player is a sheriff card, he is getting back boolean True/False response.
+Then Sheriff of the game, if he is in the game, can check if certain player is a mafia and getting response True/False (is that player mafia or not).
+
+This information is private to the player.
+
+After night killed player gets opportunity to make statement. After that next player starts round
+(for example in first round player 1 starts the round, if player 2 killed on the first night, player 3 starts the round).
+
+Game finishes with two possible outcomes:
+1.  If there's even number of red and black players remains after vote or night Mafia (Black team) wins
+3.  If all mafia is eliminated red team wins
+
+I am writing belief calculator for this game, so every time person makes declaration about other player (citizen or mafia) I want to record this belief in the table and calcualte probabilites of players being red/black according to those beliefs.
+
+There are specs:
+1. Player who got killed during the night have the highest degree of "confidence" since he is most probably is a red player
+2. If I believe someone is a red player, his belief has more "weight" to me
+3. If I believe someone is a black player, his belief has less 'weight' to me
+4. I want this calculator to calculate game from the perspective of each player of the game because sometimes players are making "impossible" declarations (they will have less than 3 mafia in the game or more than three)
+5. I want to record "sheriff" declarations when someone checked other player I want to record this as a check in the table.
+
+Write classes for that calculator first, then we will write tests and implementation for calculator logic
+
+
+----
+Certainly, the problem you're describing involves integrating beliefs from multiple players and considering the trustworthiness of each player based on the beliefs of the evaluating player. This is a more complex system of belief propagation and requires a thoughtful approach.
+
+Here's a step-by-step plan to solve this problem:
+
+1. **Initialize Belief Matrices**: Create a matrix (or a nested dictionary) to hold the belief values for each player about every other player. This matrix will be used to store the direct beliefs each player has about the others.
+
+2. **Direct Belief Calculation**: Populate the belief matrix with the direct beliefs that players have recorded about each other. These are the beliefs that players have expressed without considering the opinions of others.
+
+3. **Trustworthiness Evaluation**: For each player, calculate a trustworthiness score for every other player based on their direct beliefs. For example, if player 0 believes player 2 is red (trustworthy), player 2's beliefs will have a positive influence on player 0's final beliefs about others.
+
+4. **Belief Integration**: For each player, integrate the beliefs of other players about a target player, weighted by the trustworthiness scores. This step involves combining the direct belief of the evaluating player about the target player with the beliefs of other players about the same target, adjusted by how much the evaluating player trusts those other players.
+
+5. **Normalization**: Normalize the integrated beliefs for each player so that the final belief values are within the range [-1, 1]. This step ensures that the beliefs remain within the bounds of the belief system.
+
+6. **Iteration (Optional)**: Depending on the complexity of the belief system and the interactions between players, it may be necessary to iterate the belief integration step multiple times until the beliefs converge or reach a stable state.
+
+7. **Output Final Beliefs**: After integrating and normalizing the beliefs, output the final belief matrix, which represents the beliefs each player has about every other player after considering the network of trust and influence.
+
+This approach requires careful consideration of how beliefs are weighted and combined. It's also important to decide on a method for calculating trustworthiness and how to handle conflicting information (e.g., when two trusted players have opposing beliefs about a third player).
+
+Once we have a clear understanding of these steps and the logic behind them, we can proceed to implement the algorithm in code. Keep in mind that this is a simplified explanation, and the actual implementation may require additional considerations, such as handling cases where players have no direct beliefs about others or dealing with circular trust dependencies.

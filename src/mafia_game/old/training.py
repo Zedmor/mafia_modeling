@@ -27,6 +27,7 @@ class MafiaEnvironment():
 
     def reset(self):
         players = [Player(i, Role.CITIZEN, self.citizen_policy) for i in range(7)]
+        players[0].learner = True
         players += [Player(i, Role.MAFIA, self.mafia_policy) for i in range(7, 10)]
         random.shuffle(players)
         for i, player in enumerate(players, 0):
@@ -43,36 +44,16 @@ class MafiaEnvironment():
             else:
                 self.citizens_won += 1
 
-            total_rewards = sum(
-                [p.cumulative_reward for p in self.game_controller.game_state.players if p.team == Team.RED])
-
         print(f"Mafia won: {self.mafia_won}, Citizens won: {self.citizens_won}")
         print(f"Citizens winrate: {self.citizens_won / n_rounds}")
 
 
-class ReplayMemory:
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.memory = []
-        self.position = 0
-
-    def push(self, state, action, next_state, reward):
-        if len(self.memory) < self.capacity:
-            self.memory.append(None)
-        self.memory[self.position] = (state, action, next_state, reward)
-        self.position = (self.position + 1) % self.capacity
-
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
-
-    def __len__(self):
-        return len(self.memory)
-
-
 class DQNAgent:
-    def __init__(self, policy, memory):
+    def __init__(self, policy):
         self.policy = policy
-        self.memory = memory
+        self.memory = {'nominate_player': deque(maxlen=10000),
+                       'vote': deque(maxlen=10000),
+                       'make_declarations': deque(maxlen=10000)}
         self.gamma = 0.97  # discount factor
         self.steps = 0
         self.episode = 0
@@ -81,8 +62,8 @@ class DQNAgent:
         # TODO: Implement epsilon-greedy action selection here
         pass
 
-    def store_experience(self, state, action, next_state, reward):
-        self.memory.append([state, action, next_state, reward])
+    def store_experience(self, state, action, next_state, reward, action_type):
+        self.memory[action_type].append([state, action, next_state, reward])
 
     def update_target_net(self):
         self.policy.target_net.load_state_dict(self.policy.network.state_dict())
@@ -97,9 +78,9 @@ class DQNAgent:
             logger.setLevel(logging.ERROR)
             torch.save(self.policy.network, MODEL_PATH)
 
-        if len(self.memory) < batch_size:
+        if len(self.memory[action_type]) < batch_size:
             return
-        batch_state, batch_action, batch_next_state, batch_reward = zip(*random.sample(self.memory, batch_size))
+        batch_state, batch_action, batch_next_state, batch_reward = zip(*random.sample(self.memory[action_type], batch_size))
 
         """
         Shapes are:
@@ -122,25 +103,39 @@ class DQNAgent:
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
         # for each batch state according to policy_net
-        state_action_values = (self.policy.network(batch_state) * batch_action).sum(dim=1)
+
+        declaration_out, voting_out, nominating_out = self.policy.network(batch_state)
+
+        actions = {'make_declarations': declaration_out,
+                   'vote': voting_out,
+                   'nominate_player': nominating_out}
+
+        state_action_values = (actions[action_type] * batch_action).sum(dim=1)
 
         # Compute V(s_{t+1}) for all next states.
         # Expected values of actions for non_final_next_states are computed based
         # on the "older" target_net; selecting their best reward with max(1)[0].
         # This is merged based on the mask, such that we'll have either the expected
         # state value or 0 in case the state was final.
-        next_state_values = self.policy.target_net(batch_next_state).max(1)[0].detach()
+
+        declaration_out, voting_out, nominating_out = self.policy.target_net(batch_next_state)
+        actions = {'make_declarations': declaration_out,
+                   'vote': voting_out,
+                   'nominate_player': nominating_out}
+
+        next_state_values = actions[action_type].max(1)[0].detach()
         # Compute the expected Q values
         expected_state_action_values = (next_state_values * self.gamma) + batch_reward.squeeze()
 
         # Compute Huber loss
-        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values)
+        loss = self.policy.criterion(state_action_values, expected_state_action_values)
 
         # Optimize the model
         self.policy.optimizer.zero_grad()
         loss.backward()
         for param in self.policy.network.parameters():
-            param.grad.data.clamp_(-1, 1)
+            if param.grad is not None:
+                param.grad.data.clamp_(-1, 1)
         self.policy.optimizer.step()
 
         if episode_done:
@@ -159,9 +154,9 @@ class DQNAgent:
 
 
 # Define the agent
-memory = deque(maxlen=10000)
+
 policy = NeuralNetworkCitizenPolicy(num_players=10)
-agent = DQNAgent(policy, memory)
+agent = DQNAgent(policy)
 env = MafiaEnvironment(policy, agent)
 
 env.play(500000)

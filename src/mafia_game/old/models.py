@@ -78,7 +78,8 @@ class Player:
         self.policy = policy
         self.reward = 0
         self.cumulative_reward = 0
-        self.action_result = None
+        self.action_vector = None
+        self.learner = False
 
     def __hash__(self):
         return self.id
@@ -97,10 +98,9 @@ class Player:
         return f"{self.id} ({self.role.value}) with policy: {self.policy}"
 
     def action(self, action_type, game_state, agent):
-        total_reward = 0
         old_state_vector = game_state.get_state_vector(self, action_type)
 
-        self.action_result = torch.zeros(94)
+        self.action_vector = torch.zeros(94)
         result = getattr(self, action_type)(game_state)
 
         winner = game_state.determine_winner()
@@ -112,17 +112,15 @@ class Player:
 
         self.cumulative_reward += self.reward
 
-        total_reward = sum(
-            [p.cumulative_reward for p in game_state.players if p.team == Team.RED])
-
-        if agent and self.action_result is not None:
+        if agent and self.action_vector is not None and self.learner:
             agent.store_experience(
                 old_state_vector,
-                self.action_result,
+                self.action_vector,
                 game_state.get_state_vector(self, action_type),
                 torch.tensor([self.reward]),
+                action_type
             )
-            agent.update_policy(64, action_type, winner, total_reward)
+            agent.update_policy(32, action_type, winner, self.cumulative_reward)
         return result
 
     def make_declarations(self, game_state):
@@ -322,14 +320,11 @@ class GameState:
     def get_game_state_vector(self, player, max_actions=100):
         state_vector = []
 
+        state_vector.append(player.id)
+
         for p in self.players:
             state_vector.append(int(p.is_alive))
             state_vector.append(int(p in self.nominated_players))
-            state_vector.append(p.team.index())
-            if player == p:
-                state_vector.append(1)
-            else:
-                state_vector.append(0)
 
         actions = [
             a
@@ -388,18 +383,3 @@ class GameState:
         )
 
         return full_vector
-
-    def create_mask(self, action_type):
-        mask = torch.zeros(94)  # Total number of actions is 94 (10+11+63+10)
-        if action_type == 'vote':
-            for player in self.nominated_players:
-                mask[player.id] = 1  # Only nominated players are considered
-        elif action_type == 'nominate_player':
-            for player in self.players:
-                if player.is_alive:
-                    mask[player.id + 10] = 1
-        elif action_type == 'make_declarations':
-            mask[21:84] = 1  # The next 63 actions are for declaring
-        elif action_type == 'kill':
-            mask[84:] = 1  # The last 10 actions are for killing
-        return mask.bool()
