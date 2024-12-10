@@ -1,0 +1,55 @@
+
+
+Requirements for mafcalc system:
+
+Phase 1 - CLI
+
+1. Events are recorded in the format (<source> <action> <target>)
+    Types of events:
+        S - suspect (20-30% decrease of probability them being together)
+        SS - strong suspicion
+        Voted against (50-70% of breaking pair (we can modify it based on historical stats how often this player votes BvB))
+        Voted on the critical round (when possible B team could've won that breaks B teams where S voted against T) - it breaks triplets where that action happend
+            Voting should lead to player elimination from the game.
+
+            voting is recorded with this notation:
+
+            5: 3 4 8 (means against 5 voted 348)
+
+            after recording voting round (all players votes recorded) we calculate who is eliminated during day phase.
+
+        R - requested check from sheriff (when T had not presented himself as Sheriff) - 70% if that player presented as sheriff 10% decrease.
+        Cb - checked black (when source tell that S checked T as black player) - 90% (black can say other black player is black)
+        Cr - checked red (that means that all triplets and tuples which have source of check as red should have target as red as well,
+        this invalidate states when target is black but source remains red in that scenario,
+        it is possible however that source would be black and target would be red scenario) - black player could say other black player is red or say that red player is red.
+        O - other action breaking pair.
+
+        All events when player acts agains other player (suspect, vote, request check or checks black) are creating edge between those players from S to T and reduce probablility of them being two black players. All players starts with probability of them being together modifier as 1 (100%) (meaning that it is unmodified at the beginning and with all events mentioned that probability is decreasing by specific percentage but never reaches 0.
+
+    Events witout target:
+        E (like 4E) - elimination as red player (killed at night) - eliminate that player from all tuples and player triplets. Since self-killing is possible we can take silent elimination as 100% and if player eliminated as sheriff (4es) - then it is 80% that this player is red player and should be excluded from tuples.
+
+        Critical round (auto generated event) - when 5 or 6 players remained in the game all triplets without eliminated player could not exist, as game continues all triplets with eliminated players only could not exists.
+
+        When 3 or 4 players remains in the game, all triplets should include only 1 player from player remaining.
+
+2. For every player all possible triplets should be generated in assumption he is a red player (not in the any triplet)
+3. For every player applicaiton should show actions in which that player had a part of.
+4. For every player we should show his "redness" all the time - if he is a target of S, V, Cb action his redness is lowered. We need to calculate for which players he is a possible Black player. We need to calculate average redness for the players.
+
+
+Example:
+
+1s7 - 1 suspected 7
+1c7 - 1 checked 7 as black player etc.
+
+So our application would:
+
+1. Read file with those vectors/edges
+2. Create 2 graphs using networkx with players as nodes and probability of them being together as edges (graph starts with 1 in those edges) and relationships between players (graph starts with 0 in those edges).
+
+Then apply all edges from the file one by one, keeping track of players alive in the game.
+
+Then after reading file with all actions it will print top 10 most probable teams of 3 for each player considering that player would not be a member of that triplet and for each triplet print out multiplication of probability edges and weight of those "together" graph edges. For example if most probable triplet for player 1 is a team of 234 and 23 has "together" edge of 0.5 and 34 has together edge of of 0.5 then total probability of that team is 0.25.
+

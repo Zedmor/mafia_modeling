@@ -1,11 +1,12 @@
+import random
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Type
+from typing import List, Type, Union
+from mafia_game.actions import Action
 
 import numpy as np
 
 from mafia_game.actions import (
-    BeliefAction,
     DonCheckAction,
     KillAction,
     NominationAction,
@@ -39,8 +40,12 @@ class OtherMafias(SerializeMixin, DeserializeMixin):
     def expected_size(cls):
         return 3
 
-    def serialize(self):
-        return self.other_mafias
+    def clone(self):
+        import copy
+        return copy.deepcopy(self)
+
+    def is_terminal(self):
+        return self.team_won != Team.UNKNOWN
 
     @classmethod
     def deserialize(cls: Type[T], serialized_data: np.ndarray) -> T:
@@ -110,7 +115,6 @@ class DayPhase(Phase):
     value = 0
 
     allowed_actions = [
-        BeliefAction,
         NominationAction,
         SheriffDeclarationAction,
         PublicSheriffDeclarationAction,
@@ -213,6 +217,43 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
     team_won: Team = field(default=Team.UNKNOWN)
     nominated_players: list = field(default_factory=list)
 
+    @staticmethod
+    def build():
+        game_states = [
+            create_game_state_with_role(r) for r in
+            [Role.CITIZEN] * 6 + [Role.SHERIFF] + [Role.MAFIA] * 2 + [Role.DON]]
+        random.shuffle(game_states)
+
+        mafia_player_indexes = [i for i in range(10) if
+                                game_states[i].private_data.role in (Role.MAFIA, Role.DON)]
+
+        for mafia_player in mafia_player_indexes:
+            game_states[mafia_player].private_data.other_mafias.other_mafias = np.array(
+                mafia_player_indexes)
+
+        return CompleteGameState(
+            game_states=game_states,
+            current_phase=DayPhase(),
+            active_player=0,
+            turn=0,
+            team_won=Team.UNKNOWN,
+            )
+
+
+
+    def clone(self):
+        return self.deserialize(self.serialize())
+
+    def get_reward(self, player_index):
+        player_team = self.game_states[player_index].private_data.team
+        if self.team_won == player_team:
+            return 1.0  # Win
+        elif self.team_won == Team.UNKNOWN:
+            return 0.0  # Game not finished
+        else:
+            return -1.0  # Loss
+
+
     def serialize(self):
         # Serialize each GameState object and concatenate them
         game_states = [game_state.serialize() for game_state in self.game_states]
@@ -277,9 +318,11 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
         return complete_state
 
     @staticmethod
-    def next_state(game_state: "CompleteGameState", action_vector: "ActionVector"):
-        new_game_state: CompleteGameState
-        """We combine game_state and action_vector to get new game state"""
+    def next_state(game_state: "CompleteGameState", action_vector: Union["Action", None]):
+        new_game_state = game_state.clone()
+        if action_vector:
+            new_game_state.current_phase.execute_action(new_game_state, action_vector)
+            new_game_state.transition_to_next_phase()
         return new_game_state
 
     def index_of_night_killer(self):
@@ -303,7 +346,6 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
 
         if isinstance(self.current_phase, DayPhase):
             # During the day, all players can make declarations and nominations
-            available_action_classes.append(BeliefAction)
             available_action_classes.append(NominationAction)
             available_action_classes.append(SheriffDeclarationAction)
             available_action_classes.append(PublicSheriffDeclarationAction)
@@ -328,6 +370,25 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
                 available_action_classes.append(SheriffCheckAction)
 
         return available_action_classes
+
+    def get_mafia_player_indexes(self):
+        # Returns a list of indexes for players who are Mafia or Don
+        mafia_player_indexes = [
+            i for i, state in enumerate(self.game_states)
+            if state.private_data.role in [Role.MAFIA, Role.DON] and state.alive
+        ]
+        return mafia_player_indexes
+
+    def get_available_actions(self):
+        action_classes = self.get_available_action_classes()
+        actions = []
+        for action_class in action_classes:
+            mask = action_class.generate_action_mask(self, self.active_player)
+            for action_index, is_available in enumerate(mask):
+                if is_available:
+                    action = action_class.from_index(action_index, self, self.active_player)
+                    actions.append(action)
+        return actions
 
     def execute_action(self, action):
         self.current_phase.execute_action(self, action)
@@ -384,6 +445,10 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
         # If the game has ended, transition to the EndPhase
         if self.team_won != Team.UNKNOWN:
             self.current_phase = EndPhase()
+
+    def is_terminal(self):
+        self.check_end_conditions()
+        return self.team_won != Team.UNKNOWN
 
 def create_game_state_with_role(role: Role, alive: bool = True):
     return GameState(

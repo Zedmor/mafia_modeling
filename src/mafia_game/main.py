@@ -2,7 +2,7 @@ import os
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
-from mafia_game.multihead_nn import RedDQNNetwork, BlackDQNNetwork
+from mafia_game.multihead_nn import RedTransformerNetwork, BlackTransformerNetwork
 from mafia_game.train import train
 from mafia_game.logger import logger
 
@@ -18,9 +18,21 @@ MODEL_DIR = "models"  # Directory to save models
 # Ensure the model directory exists
 os.makedirs(MODEL_DIR, exist_ok=True)
 
-# Instantiate the neural networks for the red and black teams
-red_network = RedDQNNetwork(INPUT_SIZE, HIDDEN_SIZE)
-black_network = BlackDQNNetwork(INPUT_SIZE, HIDDEN_SIZE)
+red_network_path = os.path.join(MODEL_DIR, "red_network.pth")
+black_network_path = os.path.join(MODEL_DIR, "black_network.pth")
+
+if os.path.exists(red_network_path) and os.path.exists(black_network_path):
+    # Load pre-trained models
+    red_network = RedTransformerNetwork(INPUT_SIZE, HIDDEN_SIZE)
+    red_network.load_state_dict(torch.load(red_network_path))
+    black_network = BlackTransformerNetwork(INPUT_SIZE, HIDDEN_SIZE)
+    black_network.load_state_dict(torch.load(black_network_path))
+    logger.info("Loaded pre-trained models.")
+else:
+    # Instantiate new neural networks
+    red_network = RedTransformerNetwork(INPUT_SIZE, HIDDEN_SIZE)
+    black_network = BlackTransformerNetwork(INPUT_SIZE, HIDDEN_SIZE)
+    logger.info("Created new models.")
 
 # Optimizers
 red_optimizer = optim.Adam(red_network.parameters())
@@ -54,8 +66,8 @@ for episode in range(NUM_EPISODES):
 
     # Save the model
     if episode % SAVE_INTERVAL == 0:
-        torch.save(red_network.state_dict(), os.path.join(MODEL_DIR, f"red_network_ep{episode}.pth"))
-        torch.save(black_network.state_dict(), os.path.join(MODEL_DIR, f"black_network_ep{episode}.pth"))
+        torch.save(red_network.state_dict(), os.path.join(MODEL_DIR, f"red_network.pth"))
+        torch.save(black_network.state_dict(), os.path.join(MODEL_DIR, f"black_network.pth"))
         logger.info(f"Saved models at episode {episode}.")
 
 logger.info("Training completed.")

@@ -5,7 +5,6 @@ import numpy as np
 from mafia_game.game_state import CompleteGameState, create_game_state_with_role
 from mafia_game.common import Role, Team, MAX_PLAYERS
 from mafia_game.actions import (
-    BeliefAction,
     NominationAction,
     SheriffDeclarationAction,
     PublicSheriffDeclarationAction,
@@ -22,10 +21,6 @@ from mafia_game.logger import logger
 # Helper function to generate a random action based on the allowed actions
 def generate_random_action(player_index, action_class, game_state):
 
-    if action_class is BeliefAction:
-        return BeliefAction(
-            player_index, [random.choice(list(Team)).value for _ in range(MAX_PLAYERS)]
-            )
     if action_class is VoteAction and game_state.nominated_players:
         return VoteAction(game_state.active_player, random.choice(game_state.nominated_players))
 
@@ -43,7 +38,6 @@ def generate_random_action(player_index, action_class, game_state):
     # KillAction should be granted to Don or first Mafia on the table.
 
     if action_class in [
-        BeliefAction,
         NominationAction,
         KillAction,
         DonCheckAction,

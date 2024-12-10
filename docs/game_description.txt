@@ -1,0 +1,82 @@
+I am working on implementation for the following game:
+
+Mafia Game description:
+
+Game is played with 10 players, players are getting roles at random.
+
+At the beginning of the game there's 3 players who gets Black cards (1 Don and 2 Mafia) and 7 players get Red cards
+(6 Citizen card and 1 Sheriff card).
+
+One team is playing against each other.
+
+Three black players knows each other and red players do not know who is red and who is black.
+
+Each round have phases: "Day" and "Night".
+
+During day phase first acting player may make one of the following moves:
+
+1. Put any alive player to the elimination vote.
+2. Declare that player is a sheriff and checked other players at night
+(number of checks could not be more that nights spent since sheriff checks at night).
+3. Provide it's "Opinion" vector - i.e. if he consider other players as "red" or "black" players. I will propose vector representation of this such as vector with len of 10 (for each player) where it will have values from -2 to +2, so 0 will be "no opinion" and opinion about itself would be null and for other players it would be categorized as such:
+-2 - def black player
+-1 - probably black player
+0 - no opinion
++1 - probably red player
++2 - def red player
+
+Then next alive player make a move, with active player moving in clockwise direction.
+
+After day phase, if there's at least 2 players are been put to the vote players vote simultaneothly who they want to eliminate. Then player eliminated from the game and do not participate in the game anymore. If there's tie between multiple players vote is carried out again and if tie is reached on the second vote no one is voted out (eliminated from the game).
+
+Eliminated player makes his final declaration (is he is a sheriff and his checks) and his opinion vector.
+
+Game starts with the day and player 1 being current player.
+
+After day phase there's a night phase which starts with mafia's Don can "kill" eliminate any player. If Don is eliminated then first mafia decides if first mafia is eliminated second mafia decides. Mafia can decide to not kill anyone.
+
+Then Don checks any other player for the fact if that player is a sheriff. That information is available only to the Don player and only if Don is alive.
+
+Then Sheriff if he alive in the game can check any other player and will receive information if that other player mafia or not.
+
+After night killed player may make sheriff declaration (if he is a sheriff and who he checked) and opinion declaration.
+
+Then next round starts with next non-eliminated player. For example game starts with player 1, if player (2) been killed on the first night, second round starts with player (3).
+
+If there's even number of Black players to Red Players or more at any stage of the game (after voting or killing) that means mafia wins. Red players win only if all black players are eliminated from the game.
+
+Here's explanation on how game composition might look like by turns:
+
+    1 turn day when 10 players present - usually no one is eliminated on that round since there's not enough information
+    1 turn night mafia kills player and 9 is presend
+    2 turn day when 9 players present - one player is voted out
+        Game always continue to next day since victory condition for mafia could not be reached yet, only one player is voted out
+    2 turn night when 8 players present mafia kills one player during night
+    3 turn day when 7 players present  - one player is voted out
+    3 turn night when 6 players present mafia kills one player during night
+        Mafia can win in 3rd night when two red players been voted out already and red player been shot during the night.
+    4 turn day when 5 players present - one player is voted out
+    4 turn night when 4 players present mafia kills one player during night
+        Mafia can win in 4rd turn night when two red players been voted out already and red player been shot during the night.
+        4th turn will only happen if one mafia been voted out (so after 2 voting rounds game will have 1 or 2 black players and other red players)
+    5 turn day when 3 players present - one player is voted out
+    game ends if mafia been voted out on the 5 day with citizen win or ends with mafia win if citizen been voted out
+    On 5th turn there's only 1 mafia could be present in the game. If more than 2 mafia were present then victory condition for mafia been triggerd on the 4 turn night if no mafia present in the game then red players won.
+
+
+Some consideration on data structures and game state representation:
+
+1. We should have have vector of turns (we may use 10 moves as max amount of moves, in reality when mafia shoots every night and when there's vote every day there's maximum 5 moves available but we can safeguard us to have array of 10 turns)
+2. Each turn should have moves for each player:
+2.1. His declaration vector
+2.2. His nomination vector (if he nominates anyone).
+2.3. His voting vector (when he votes for someone elimination)
+2.4. For black players shooting vector (who they shoot during night)
+2.5. For sheriff check vector (who he decides to check and result of that check (1 - mafia, 0 - non mafia)
+2.6. For Don check vector (who he decides to check for being sheriff and result of that check (1 - sheriff, 0 - non sheriff)
+
+I want to use MCST (monte carlo tree search) for modeling this game. Please advice if this is a good method to model this game and what I need to conisder in modeling. My goal is to calculate game theory optimal strategy for red and black players, such as deviation of that strategy would hurt their winrate.
+
+Please advice me with architecture for that.
+
+I want to create MCST algorithm for it to find most optimal strategy for both teams. What should I consider doing that?

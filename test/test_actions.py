@@ -19,16 +19,6 @@ def create_test_game_state():
     return complete_game_state
 
 
-# Test BeliefAction
-def test_belief_action():
-    game_state = create_test_game_state()
-    action = BeliefAction(player_index=0, beliefs=[Team.BLACK_TEAM.value] * 10)
-    action.apply(game_state)
-    assert (
-        game_state.game_states[0].public_data.beliefs.checks[game_state.turn][1]
-        == Team.BLACK_TEAM.value
-    )
-
 
 # Test KillAction
 def test_kill_action():
@@ -120,18 +110,6 @@ def mock_game_state():
     return game_state
 
 
-# Test the from_output_vector method of BeliefAction
-def test_belief_action_from_output_vector(mock_game_state):
-    player_index = 0
-    output_vector = torch.rand((10, 3))  # Random probabilities for each player and team
-    action = BeliefAction.from_output_vector(
-        output_vector, mock_game_state, player_index
-    )
-    assert isinstance(action, BeliefAction)
-    assert len(action.beliefs) == 10
-    assert all(belief in [0, 1, 2] for belief in action.beliefs)
-
-
 # Test the from_index method of PublicSheriffDeclarationAction
 def test_public_sheriff_declaration_action_from_index(mock_game_state):
     player_index = 0
@@ -151,58 +129,6 @@ def test_kill_action_apply(mock_game_state):
     action = KillAction(player_index, target_player)
     action.apply(mock_game_state)
     assert not mock_game_state.game_states[target_player].alive
-
-
-def test_belief_action_from_output_vector_clear_distribution(mock_game_state):
-    player_index = 0
-    # Create a mock output vector where the highest probability clearly indicates the team
-    output_vector = torch.tensor([
-        [0.8, 0.1, 0.1],  # Clearly UNKNOWN
-        [0.1, 0.8, 0.1],  # Clearly BLACK_TEAM
-        [0.1, 0.1, 0.8],  # Clearly RED_TEAM
-        # ... repeat for all players
-    ])
-    action = BeliefAction.from_output_vector(output_vector, mock_game_state, player_index)
-    expected_beliefs = [Team.UNKNOWN.value, Team.BLACK_TEAM.value, Team.RED_TEAM.value] * (output_vector.size(0) // 3)
-    assert action.beliefs == expected_beliefs
-
-# Test that from_output_vector handles ties by selecting the first team with the highest probability
-def test_belief_action_from_output_vector_ties(mock_game_state):
-    player_index = 0
-    # Create a mock output vector with ties in the probabilities
-    output_vector = torch.tensor([
-        [0.5, 0.5, 0.0],  # Tie between UNKNOWN and BLACK_TEAM
-        [0.0, 0.5, 0.5],  # Tie between BLACK_TEAM and RED_TEAM
-        # ... repeat for all players
-    ])
-    action = BeliefAction.from_output_vector(output_vector, mock_game_state, player_index)
-    expected_beliefs = [Team.UNKNOWN.value, Team.BLACK_TEAM.value] * (output_vector.size(0) // 2)
-    assert action.beliefs == expected_beliefs
-
-# Test that from_output_vector handles uniform probability distributions
-def test_belief_action_from_output_vector_uniform_distribution(mock_game_state):
-    player_index = 0
-    # Create a mock output vector with uniform probabilities
-    output_vector = torch.full((10, 3), 1/3)
-    action = BeliefAction.from_output_vector(output_vector, mock_game_state, player_index)
-    # In the case of uniform probabilities, argmax should select the first team (UNKNOWN)
-    expected_beliefs = [Team.UNKNOWN.value] * output_vector.size(0)
-    assert action.beliefs == expected_beliefs
-
-# Test that from_output_vector handles invalid probabilities (e.g., negative or greater than 1)
-def test_belief_action_from_output_vector_invalid_probabilities(mock_game_state):
-    player_index = 0
-    # Create a mock output vector with invalid probabilities
-    output_vector = torch.tensor([
-        [-0.1, 1.2, 0.0],  # Invalid probabilities
-        [1.1, -0.2, 0.5],  # Invalid probabilities
-        # ... repeat for all players
-    ])
-    # Clamp the probabilities to a valid range [0, 1] before argmax
-    clamped_output_vector = torch.clamp(output_vector, 0, 1)
-    action = BeliefAction.from_output_vector(clamped_output_vector, mock_game_state, player_index)
-    # Check that beliefs are still in the valid range [0, 1, 2]
-    assert all(belief in [0, 1, 2] for belief in action.beliefs)
 
 
 def test_public_sheriff_declaration_action_from_index(mock_game_state):

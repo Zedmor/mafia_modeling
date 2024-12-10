@@ -16,9 +16,9 @@ class InputTypes(Enum):
 
 class FromIndexTargetPlayerMixin:
     @classmethod
-    def from_index(cls, action_index, game_state, player_index):
+    def from_index(cls, target_player, game_state, player_index):
         # Create an instance of NominationAction using the action_index
-        return cls(player_index, action_index)
+        return cls(player_index, target_player)
 
 
 class Action(ABC):
@@ -38,43 +38,12 @@ class Action(ABC):
     @classmethod
     def generate_action_mask(cls, game_state: "CompleteGameState", player_index):
         mask = torch.ones(cls.action_size, dtype=torch.float32)
+        for i, player_state in enumerate(game_state.game_states):
+            if not player_state.alive or i == player_index:
+                mask[i] = 0
+
         return mask
 
-
-
-class BeliefAction(Action):
-    action_size = 30
-
-    input_type = InputTypes.VECTOR
-
-    def __init__(self, player_index, beliefs):
-        self.player_index = player_index
-        self.beliefs = beliefs
-
-    def apply(self, game_state: "CompleteGameState"):
-        game_state.game_states[self.player_index].public_data.beliefs.checks[
-            game_state.turn
-        ] = self.beliefs
-
-    @staticmethod
-    def normalize_vector(output_vector):
-        # The output_vector is expected to be a tensor of shape (10, 3)
-        # where each row is the probability distribution over the teams for each player.
-        reshaped_output_vector = output_vector.view(10, 3)
-
-        # Convert the output probabilities to scalar beliefs by taking the argmax over the second dimension
-        beliefs = reshaped_output_vector.argmax(dim=1).tolist()  # Convert to a list of scalar beliefs
-        return beliefs
-
-
-    @classmethod
-    def from_output_vector(cls, output_vector, game_state, player_index):
-        beliefs = cls.normalize_vector(output_vector)
-        return cls(player_index, Check.deserialize(np.array(beliefs)))
-
-
-    def __repr__(self):
-        return f"Player {self.player_index}. Beliefs: {[self.beliefs]}"
 
 
 class KillAction(Action, FromIndexTargetPlayerMixin):
@@ -85,6 +54,8 @@ class KillAction(Action, FromIndexTargetPlayerMixin):
         self.target_player = target_player
 
     def apply(self, game_state: "CompleteGameState"):
+        if game_state.game_states[self.target_player].alive == 0:
+            raise RuntimeError("Killing dead player")
         # Apply the kill action to the game state
         # target_player is the index of the player to be killed
         game_state.game_states[self.player_index].public_data.kills.checks[
@@ -96,15 +67,6 @@ class KillAction(Action, FromIndexTargetPlayerMixin):
     def __repr__(self):
         return f"Player {self.player_index}. Kills: {self.target_player}"
 
-    @classmethod
-    def generate_action_mask(cls, game_state: "CompleteGameState", player_index):
-        mask = torch.ones(cls.action_size, dtype=torch.float32)
-        for i, player_state in enumerate(game_state.game_states):
-            if not player_state.alive or i == player_index:
-                mask[i] = 0
-
-        return mask
-
 
 class NominationAction(Action, FromIndexTargetPlayerMixin):
     def __init__(self, player_index, target_player):
@@ -114,6 +76,8 @@ class NominationAction(Action, FromIndexTargetPlayerMixin):
     def apply(self, game_state: "CompleteGameState"):
         # Apply the nomination action to the game state
         # target_player is the index of the player to be nominated
+        if game_state.game_states[self.target_player].alive == 0:
+            raise RuntimeError("Nominating dead player")
         game_state.nominated_players.append(self.target_player)
         game_state.game_states[self.player_index].public_data.nominations.checks[
             game_state.turn
@@ -152,10 +116,6 @@ class DonCheckAction(Action, FromIndexTargetPlayerMixin):
             game_state.turn
         ][self.target_player] = check_result
 
-    @classmethod
-    def generate_action_mask(cls, game_state: "CompleteGameState", player_index):
-        mask = torch.ones(cls.action_size, dtype=torch.float32)
-        return mask
 
     def __repr__(self):
         return f"Player {self.player_index} (Don). Checks: {self.target_player}"
@@ -195,6 +155,10 @@ class SheriffDeclarationAction(Action):
         game_state.game_states[self.player_index].public_data.sheriff_declaration[
             game_state.turn
         ] = self.i_am_sheriff
+
+    @classmethod
+    def generate_action_mask(cls, game_state: "CompleteGameState", player_index):
+        return torch.ones(cls.action_size, dtype=torch.float32)
 
     @classmethod
     def from_index(cls, action_index, game_state, player_index):

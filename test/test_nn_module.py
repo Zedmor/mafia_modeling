@@ -7,7 +7,7 @@ from mafia_game.multihead_nn import (
     BlackDQNNetwork,
     select_action,
 )
-from mafia_game.actions import BeliefAction, KillAction, InputTypes
+from mafia_game.actions import KillAction
 
 
 # Define a fixture for the input size and hidden size
@@ -26,18 +26,9 @@ def mock_game_state():
 
 # Test the initialization of the BaseDQNNetwork
 def test_base_dqn_network_initialization(network_sizes):
-    network = BaseDQNNetwork(**network_sizes, action_types=[BeliefAction, KillAction])
+    network = BaseDQNNetwork(**network_sizes, action_types=[KillAction])
     assert isinstance(network, BaseDQNNetwork)
     assert len(network.heads) == 2  # Two action types
-
-
-# Test the forward pass of the BaseDQNNetwork
-def test_base_dqn_network_forward(network_sizes, mock_game_state):
-    network = BaseDQNNetwork(**network_sizes, action_types=[BeliefAction, KillAction])
-    dummy_input = torch.randn(1, network_sizes["input_size"])
-    mask = torch.ones(BeliefAction.action_size)
-    output = network(dummy_input, 0, mask)  # Index 0 for BeliefAction
-    assert output.shape == (1, BeliefAction.action_size)
 
 
 # Test the initialization of the RedDQNNetwork
@@ -56,21 +47,6 @@ def test_black_dqn_network_initialization(network_sizes):
     # Check that only black_team actions are included
     for action_type in network.action_types:
         assert action_type.black_team
-
-
-# Test the select_action function with a vector input type
-def test_select_action_vector_input(network_sizes, mock_game_state):
-    network = RedDQNNetwork(**network_sizes)
-    dummy_input = torch.randn(1, network_sizes["input_size"])
-    # Mock the output of the network to be a tensor of shape (10, 3)
-    network_output = torch.randn(10, 3)
-    network.forward = MagicMock(return_value=network_output)
-    # Select a BeliefAction which has a vector input type
-    action = select_action(
-        network, dummy_input, BeliefAction, player_index=0, epsilon=0
-    )
-    assert isinstance(action, BeliefAction)
-    assert len(action.beliefs) == 10
 
 
 # Test the select_action function with an index input type

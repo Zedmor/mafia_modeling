@@ -2,7 +2,6 @@ import pytest
 from mafia_game.game_state import CompleteGameState, GameState, PrivateData, PublicData
 from mafia_game.common import Role, Team, MAX_PLAYERS
 from mafia_game.actions import (
-    BeliefAction,
     NominationAction,
     SheriffDeclarationAction,
     PublicSheriffDeclarationAction,
@@ -46,7 +45,6 @@ def test_get_available_action_classes_day_phase(complete_game_state):
     complete_game_state.current_phase = DayPhase()
     available_actions = complete_game_state.get_available_action_classes()
     assert set(available_actions) == {
-        BeliefAction,
         NominationAction,
         SheriffDeclarationAction,
         PublicSheriffDeclarationAction,

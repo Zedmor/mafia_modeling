@@ -1,7 +1,7 @@
 import pytest
 
-from calculator.console_app import process_input_lines
-from calculator.models import BeliefType, Game, Player
+from calculator_old.console_app import process_input_lines
+from calculator_old.models import BeliefType, Game, Player
 
 
 @pytest.fixture

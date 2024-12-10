@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from calculator.models import (
+from calculator_old.models import (
     BeliefType,
     Player,
     Game,

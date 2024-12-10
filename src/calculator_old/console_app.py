@@ -1,4 +1,4 @@
-from calculator.models import BeliefCalculator, BeliefType, Game, Player
+from calculator_old.models import BeliefCalculator, BeliefType, Game, Player
 import curses
 
 # Constants for belief strengths
