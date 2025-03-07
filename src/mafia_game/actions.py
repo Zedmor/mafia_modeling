@@ -5,6 +5,7 @@ import numpy as np
 import torch
 
 from mafia_game.common import Check, Role, Team
+from mafia_game.logger import LogType
 
 
 # TODO: Add serialization to vector
@@ -52,6 +53,7 @@ class NullAction(Action):
 
     def apply(self, game_state: "CompleteGameState", *args):
         pass
+        # game_state.log(self.__repr__())
 
 
 class KillAction(Action, FromIndexTargetPlayerMixin):
@@ -72,9 +74,10 @@ class KillAction(Action, FromIndexTargetPlayerMixin):
         # Mark the player as dead in the game state
         game_state.game_states[self.target_player].alive = -1
         game_state.final_speech()
+        game_state.log(self.__repr__(), player_index=self.player_index, log_type=LogType.KILL_ACTION)
 
     def __repr__(self):
-        return f"Player {self.player_index}. Kills: {self.target_player}"
+        return f"Игрок {self.player_index}. убивает: {self.target_player}"
 
 
 class NominationAction(Action, FromIndexTargetPlayerMixin):
@@ -91,6 +94,7 @@ class NominationAction(Action, FromIndexTargetPlayerMixin):
         game_state.game_states[self.player_index].public_data.nominations.checks[
             game_state.turn
         ][self.target_player] = 1
+        game_state.log(self.__repr__(), log_type=LogType.VOTE_ACTION)
 
     @classmethod
     def generate_action_mask(cls, game_state: "CompleteGameState", player_index):
@@ -102,7 +106,7 @@ class NominationAction(Action, FromIndexTargetPlayerMixin):
         return mask
 
     def __repr__(self):
-        return f"Player {self.player_index}. Nominates: {self.target_player}"
+        return f"Игрок {self.player_index}. номинирует: {self.target_player}"
 
 
 class DonCheckAction(Action, FromIndexTargetPlayerMixin):
@@ -125,9 +129,11 @@ class DonCheckAction(Action, FromIndexTargetPlayerMixin):
             game_state.turn
         ][self.target_player] = check_result
 
+        game_state.log(f"{self.__repr__()}. Этот игрок {'шериф' if check_result else 'не шериф'}", log_type=LogType.DON_CHECK, player_index=self.player_index)
+
 
     def __repr__(self):
-        return f"Player {self.player_index} (Don). Checks: {self.target_player}"
+        return f"Игрок {self.player_index} (Дон). Проверяет: {self.target_player}"
 
 
 class SheriffCheckAction(Action, FromIndexTargetPlayerMixin):
@@ -148,9 +154,10 @@ class SheriffCheckAction(Action, FromIndexTargetPlayerMixin):
         game_state.game_states[self.player_index].private_data.sheriff_checks.checks[
             game_state.turn
         ][self.target_player] = check_result.value
+        game_state.log(f"{self.__repr__()} это: {'мафия' if check_result == Team.BLACK_TEAM else 'не мафия'}", log_type=LogType.SHERIFF_CHECK, player_index=self.player_index)
 
     def __repr__(self):
-        return f"Player {self.player_index} (Sheriff). Checks: {self.target_player}"
+        return f"Игрок {self.player_index} (Шериф). проверяет: {self.target_player}"
 
 
 class SheriffDeclarationAction(Action):
@@ -222,6 +229,7 @@ class VoteAction(Action, FromIndexTargetPlayerMixin):
         game_state.game_states[self.player_index].public_data.votes.checks[
             game_state.turn
         ][self.target_player] = 1
+        game_state.log(self.__repr__(), log_type=LogType.VOTE_ACTION)
 
     @classmethod
     def generate_action_mask(cls, game_state: "CompleteGameState", player_index):
@@ -239,7 +247,7 @@ class VoteAction(Action, FromIndexTargetPlayerMixin):
         return mask
 
     def __repr__(self):
-        return f"Player {self.player_index}. Votes: {self.target_player}"
+        return f"Игрок {self.player_index}. Голосует против: {self.target_player}"
 
 
 class EliminateAllNominatedVoteAction(Action):
@@ -252,6 +260,7 @@ class EliminateAllNominatedVoteAction(Action):
     def apply(self, game_state: "CompleteGameState"):
         # Record the player's vote on eliminating all tied players
         game_state.eliminate_all_votes[self.player_index] = 1 if self.eliminate_all else 0
+        game_state.log(self.__repr__(), log_type=LogType.VOTE_RESULT)
 
     @classmethod
     def generate_action_mask(cls, game_state: "CompleteGameState", player_index):

@@ -1,7 +1,7 @@
 import random
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Type, Union
+from typing import List, Type, Union, Optional
 from mafia_game.actions import Action, NullAction, EliminateAllNominatedVoteAction
 
 import numpy as np
@@ -28,7 +28,7 @@ from mafia_game.common import (
     SerializeMixin, T, Team,
     Votes,
     )
-from mafia_game.logger import logger
+from mafia_game.logger import logger, LogMessage, LogType
 
 
 @dataclass
@@ -54,6 +54,7 @@ class PrivateData(SerializeMixin, DeserializeMixin):
     sheriff_checks: Checks = field(default_factory=Checks)
     don_checks: Checks = field(default_factory=Checks)
     other_mafias: OtherMafias = field(default_factory=OtherMafias)
+    log: List[LogMessage] = field(default_factory=list)
 
     @property
     def team(self):
@@ -121,6 +122,7 @@ class DayPhase(Phase):
 
     def next_phase(self, game_state: "CompleteGameState"):
         # Transition to the voting phase after all players have taken their actions
+        game_state.log(f"Переход из Дневной Фазы в Фазу Голосования", log_type=LogType.PHASE_CHANGE)
         return VotingPhase()
 
     def __repr__(self):
@@ -139,17 +141,19 @@ class VotingPhase(Phase):
                 game_state.resolve_votes()
                 if game_state.voting_round == 1:
                     # If there was a tie, stay in VotingPhase for second round
+                    game_state.log(f"Ничья в первом раунде голосования. Переход ко второму раунду голосования.", log_type=LogType.VOTE_RESULT)
                     game_state.reset_active_player_for_new_voting_round()
                     return VotingPhase()
                 # Otherwise, clear nominations and move to night phase
                 game_state.nominated_players = []
             else:
-                logger.info("Nobody had been nominated. Skipping vote.")
+                game_state.log("Никто не был номинирован. Пропуск голосования.", log_type=LogType.VOTE_RESULT)
         elif game_state.voting_round == 1:
             # Second voting round
             game_state.resolve_votes()
             if game_state.voting_round == 2:
                 # If there was a tie again, stay in VotingPhase for third round
+                game_state.log(f"Ничья во втором раунде голосования. Переход к третьему раунду (голосование за исключение всех).", log_type=LogType.VOTE_RESULT)
                 game_state.reset_active_player_for_new_voting_round()
                 return VotingPhase()
             # Otherwise, clear tied players and move to night phase
@@ -159,7 +163,8 @@ class VotingPhase(Phase):
             game_state.resolve_eliminate_all_vote()
             # Clear tied players and move to night phase
             game_state.tied_players = []
-            
+        
+        game_state.log("Переход из Фазы Голосования в Ночную Фазу Убийства", log_type=LogType.PHASE_CHANGE)
         return NightKillPhase()
 
     def __repr__(self):
@@ -172,6 +177,7 @@ class NightKillPhase(Phase):
 
     def next_phase(self, game_state: "CompleteGameState"):
         # Resolve votes and transition to the night kill phase
+        game_state.log("Переход из Ночной Фазы Убийства в Ночную Фазу Дона", log_type=LogType.PHASE_CHANGE)
         return NightDonPhase()
 
     def __repr__(self):
@@ -184,6 +190,7 @@ class NightDonPhase(Phase):
 
     def next_phase(self, game_state: "CompleteGameState"):
         # Resolve votes and transition to the night kill phase
+        game_state.log("Переход из Ночной Фазы Дона в Ночную Фазу Шерифа", log_type=LogType.PHASE_CHANGE)
         return NightSheriffPhase()
 
     def __repr__(self):
@@ -195,6 +202,7 @@ class NightSheriffPhase(Phase):
 
     def next_phase(self, game_state: "CompleteGameState"):
         # Resolve votes and transition to the night kill phase
+        game_state.log("Переход из Ночной Фазы Шерифа в Завершающую Фазу", log_type=LogType.PHASE_CHANGE)
         return EndPhase()
 
     def __repr__(self):
@@ -206,9 +214,11 @@ class EndPhase(Phase):
     value = 5
 
     def next_phase(self, game_state: "CompleteGameState"):
-        for player in game_state.game_states:
+        for n, player in enumerate(game_state.game_states):
             if player.alive == -1:
-                player.alive = 0  # Player killed durint the night dead for good
+                player.alive = 0  # Player killed during the night dead for good
+                game_state.log(f"Игрок {n} был убит ночью", log_type=LogType.ELIMINATION)
+        
         # Resolve votes and transition to the night kill phase
         game_state.check_end_conditions()
         game_state.turn += 1
@@ -219,7 +229,9 @@ class EndPhase(Phase):
             if game_state.game_states[game_state.active_player].alive:
                 break
 
-        logger.info(f"Alive players: {[i for i, game_state in enumerate(game_state.game_states) if game_state.alive]}")
+        alive_players = [i for i, game_state in enumerate(game_state.game_states) if game_state.alive]
+        game_state.log(f"Конец хода {game_state.turn-1}. Живые игроки: {alive_players}", log_type=LogType.GAME_STATE)
+        game_state.log(f"Начало хода {game_state.turn}. Первый игрок: {game_state.active_player}", log_type=LogType.GAME_STATE)
 
         return DayPhase()
 
@@ -248,6 +260,41 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
     voting_round: int = field(default=0)  # Track which voting round we're in (0=first, 1=second, 2=third)
     tied_players: list = field(default_factory=list)  # Track players who tied in voting
     eliminate_all_votes: np.array = field(default_factory=lambda: np.zeros(MAX_PLAYERS, dtype=int))  # Track votes for eliminating all tied players
+    game_log: List[LogMessage] = field(default_factory=list)  # Global game log
+
+    def log(self, message: str, log_type: LogType = LogType.OTHER, player_index: Optional[int] = None, 
+            target_player: Optional[int] = None):
+        """
+        Add a log message to the game log and optionally to a specific player's log.
+        
+        Args:
+            message: The log message
+            log_type: Type of log message
+            player_index: The player who performed the action (optional)
+            target_player: The player who was the target of the action (optional)
+        """
+        # Create the log message
+        log_msg = LogMessage(
+            message=message,
+            log_type=log_type,
+            turn=self.turn,
+            player_index=player_index,
+            target_player_index=target_player
+        )
+        
+        # Add to global game log
+        self.game_log.append(log_msg)
+        
+        # Log to console
+        logger.info(str(log_msg))
+        
+        # If target_player is specified, only add to that player's log
+        if player_index is not None:
+            self.game_states[player_index].private_data.log.append(log_msg)
+        else:
+            # Otherwise add to all players' logs
+            for player_state in self.game_states:
+                player_state.private_data.log.append(log_msg)
 
     @staticmethod
     def build():
@@ -263,7 +310,7 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
             game_states[mafia_player].private_data.other_mafias.other_mafias = np.array(
                 mafia_player_indexes)
 
-        return CompleteGameState(
+        game_state = CompleteGameState(
             game_states=game_states,
             current_phase=DayPhase(),
             active_player=0,
@@ -271,6 +318,11 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
             turn=0,
             team_won=Team.UNKNOWN,
             )
+        
+        game_state.log("Игра инициализирована", log_type=LogType.GAME_STATE)
+        game_state.log(f"Начало хода {game_state.turn}. Первый игрок: {game_state.active_player}", log_type=LogType.GAME_STATE)
+        
+        return game_state
 
     def reset_active_player_for_new_voting_round(self):
         """Reset the active player to the first alive player for a new voting round"""
@@ -280,6 +332,8 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
                 self.active_player = i
                 self.phase_start_player = i
                 break
+        
+        self.log(f"Сброс активного игрока на {self.active_player} для нового раунда голосования", log_type=LogType.GAME_STATE)
 
     def clone(self):
         return self.deserialize(self.serialize())
@@ -316,7 +370,9 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
         # Update the turn, ensuring it doesn't exceed the maximum number of turns
         if self.turn < MAX_TURNS - 1:
             self.turn += 1
+            self.log(f"Ход обновлен до {self.turn}", log_type=LogType.GAME_STATE)
         else:
+            self.log("Достигнуто максимальное количество ходов", log_type=LogType.GAME_STATE)
             raise ValueError("Maximum number of turns reached")
 
     @staticmethod
@@ -457,6 +513,12 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
         # Execute the action
         self.current_phase.execute_action(self, action)
         
+        # Log the action
+        if not isinstance(action, NullAction):
+            player_index = action.player_index
+            target_player = getattr(action, 'target_player', None)
+            # self.log(str(action), log_type=LogType.ACTION, player_index=player_index, target_player=target_player)
+        
         # Move to the next alive player
         original_player = self.active_player
         while True:
@@ -476,6 +538,7 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
                 break
 
     def transition_to_next_phase(self):
+        old_phase = self.current_phase
         self.current_phase = self.current_phase.next_phase(self)
         # Reset the phase_start_player for the new phase
         self.phase_start_player = self.active_player
@@ -494,7 +557,7 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
                         if votes[target_player]:
                             vote_counts[target_player] += 1
             
-            logger.info(f"Tie-breaking round {self.voting_round} vote counts: {vote_counts}")
+            self.log(f"Результаты голосования в раунде {self.voting_round} для разрешения ничьей: {vote_counts}", log_type=LogType.VOTE_RESULT)
         else:
             # Regular voting round - count all votes
             for player_state in self.game_states:
@@ -504,11 +567,11 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
                         if vote:
                             vote_counts[target_player] += 1
             
-            logger.info(f"First round vote counts: {vote_counts}")
+            self.log(f"Результаты первого раунда голосования: {vote_counts}", log_type=LogType.VOTE_RESULT)
 
         # Determine if a player has been voted out
         if np.sum(vote_counts) == 0:
-            logger.info("No votes cast, no one is eliminated.")
+            self.log("Голосов не подано, никто не исключен.", log_type=LogType.VOTE_RESULT)
             self.voting_round = 0  # Reset voting round
             self.tied_players = []  # Clear tied players
             return
@@ -520,16 +583,16 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
         players_with_max_votes = [p for p in players_with_max_votes if vote_counts[p] > 0]
         
         if not players_with_max_votes:
-            logger.info("No valid votes, no one is eliminated.")
+            self.log("Нет действительных голосов, никто не исключен.", log_type=LogType.VOTE_RESULT)
             self.voting_round = 0  # Reset voting round
-            self.tie_players = []  # Clear tied players
+            self.tied_players = []  # Clear tied players
             return
 
         if len(players_with_max_votes) == 1:
             # If there is a clear player with the most votes, eliminate that player
             eliminated_player = players_with_max_votes[0]
             self.game_states[eliminated_player].alive = 0
-            logger.info(f'Eliminated player {eliminated_player}')
+            self.log(f'Игрок {eliminated_player} был исключен голосованием', log_type=LogType.ELIMINATION)
             
             # Reset voting state
             self.voting_round = 0
@@ -538,12 +601,12 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
             # There's a tie
             if self.voting_round == 0:
                 # First round tie - move to second round with tied players
-                logger.info(f"First round tie between players {players_with_max_votes}. Moving to second round.")
+                self.log(f"Ничья в первом раунде между игроками {players_with_max_votes}. Переход ко второму раунду.", log_type=LogType.VOTE_RESULT)
                 self.tied_players = players_with_max_votes
                 self.voting_round = 1
             elif self.voting_round == 1:
                 # Second round tie - move to third round
-                logger.info(f"Second round tie between players {players_with_max_votes}. Moving to third round.")
+                self.log(f"Ничья во втором раунде между игроками {players_with_max_votes}. Переход к третьему раунду.", log_type=LogType.VOTE_RESULT)
                 self.tied_players = players_with_max_votes
                 self.voting_round = 2
                 # Reset eliminate_all_votes for the third round
@@ -561,15 +624,16 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
         # Count yes votes
         yes_votes = np.sum(self.eliminate_all_votes)
         
-        logger.info(f"Eliminate all vote: {yes_votes} yes votes out of {alive_players_count} alive players")
+        self.log(f"Голосование за исключение всех: {yes_votes} голосов 'за' из {alive_players_count} живых игроков", log_type=LogType.VOTE_RESULT)
         
         # If more than half of alive players voted yes, eliminate all tied players
         if yes_votes > alive_players_count / 2:
-            logger.info(f"Majority voted to eliminate all tied players: {self.tied_players}")
+            self.log(f"Большинство проголосовало за исключение всех игроков с ничьей: {self.tied_players}", log_type=LogType.VOTE_RESULT)
             for player in self.tied_players:
                 self.game_states[player].alive = 0
+                self.log(f"Игрок {player} был исключен голосованием", log_type=LogType.ELIMINATION)
         else:
-            logger.info("Not enough votes to eliminate tied players, no one is eliminated.")
+            self.log("Недостаточно голосов для исключения игроков с ничьей, никто не исключен.", log_type=LogType.VOTE_RESULT)
             
         # Reset voting state
         self.voting_round = 0
@@ -590,8 +654,10 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
         # Check winning conditions
         if black_team_count >= red_team_count:
             self.team_won = Team.BLACK_TEAM
+            self.log("Черная команда (Мафия) победила в игре!", log_type=LogType.GAME_END)
         elif black_team_count == 0:
             self.team_won = Team.RED_TEAM
+            self.log("Красная команда (Мирные жители) победила в игре!", log_type=LogType.GAME_END)
         else:
             self.team_won = Team.UNKNOWN  # Game continues
 
@@ -601,6 +667,8 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
 
     def is_terminal(self):
         self.check_end_conditions()
+        if self.turn >= 10 and self.team_won == Team.UNKNOWN:
+            self.log("Игра достигла максимального количества ходов (10). Игра окончена.", log_type=LogType.GAME_END)
         return self.team_won != Team.UNKNOWN or self.turn >= 10
 
 

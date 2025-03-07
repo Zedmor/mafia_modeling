@@ -1,23 +1,45 @@
 import logging
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import List, Optional
 
-logging.getLogger().setLevel(logging.INFO)
+# Configure the logger
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
+# Create a logger
 logger = logging.getLogger('mafia_game')
-logger.setLevel(logging.INFO)
 
-# Create handlers
-c_handler = logging.StreamHandler()
-f_handler = logging.FileHandler('file.log')
-c_handler.setLevel(logging.INFO)
-f_handler.setLevel(logging.ERROR)
+class LogType(Enum):
+    KILL_ACTION = "KILL_ACTION"
+    ACTION = "ACTION"
+    PHASE_CHANGE = "PHASE_CHANGE"
+    GAME_STATE = "GAME_STATE"
+    VOTE_RESULT = "VOTE_RESULT"
+    VOTE_ACTION = "VOTE_ACTION"
+    ELIMINATION = "ELIMINATION"
+    GAME_END = "GAME_END"
+    DON_CHECK = "DON_CHECK"
+    SHERIFF_CHECK = "SHERIFF_CHECK"
+    UTTERANCE = "UTTERANCE"
+    OTHER = "OTHER"
 
-# Create formatters and add it to handlers
-c_format = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
-f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-c_handler.setFormatter(c_format)
-f_handler.setFormatter(f_format)
-
-# Add handlers to the logger
-logger.addHandler(c_handler)
-logger.addHandler(f_handler)
-
+@dataclass
+class LogMessage:
+    message: str
+    log_type: LogType = LogType.OTHER
+    turn: int = 0
+    player_index: Optional[int] = None
+    target_player_index: Optional[int] = None
+    timestamp: str = field(default_factory=lambda: logging.Formatter().formatTime(logging.LogRecord("", 0, "", 0, "", (), None)))
+    
+    def __str__(self):
+        player_info = f"Игрок {self.player_index}" if self.player_index is not None else ""
+        target_info = f" -> игрока {self.target_player_index}" if self.target_player_index is not None else ""
+        turn_info = f"[Ход {self.turn}]" if self.turn > 0 else ""
+        
+        prefix = f"{turn_info} {player_info}{target_info}: " if (player_info or target_info or turn_info) else ""
+        return f"{prefix}{self.message}"
