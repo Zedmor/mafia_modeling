@@ -45,6 +45,14 @@ class Action(ABC):
         return mask
 
 
+class NullAction(Action):
+
+    def __repr__(self):
+        return "Player {} makes no action".format(self.player_index)
+
+    def apply(self, game_state: "CompleteGameState", *args):
+        pass
+
 
 class KillAction(Action, FromIndexTargetPlayerMixin):
     red_team = False
@@ -62,7 +70,8 @@ class KillAction(Action, FromIndexTargetPlayerMixin):
             game_state.turn
         ][self.target_player] = 1
         # Mark the player as dead in the game state
-        game_state.game_states[self.target_player].alive = 0
+        game_state.game_states[self.target_player].alive = -1
+        game_state.final_speech()
 
     def __repr__(self):
         return f"Player {self.player_index}. Kills: {self.target_player}"
@@ -87,7 +96,7 @@ class NominationAction(Action, FromIndexTargetPlayerMixin):
     def generate_action_mask(cls, game_state: "CompleteGameState", player_index):
         mask = torch.ones(cls.action_size, dtype=torch.float32)
         for i, player_state in enumerate(game_state.game_states):
-            if not player_state.alive or i == player_index:
+            if not player_state.alive or i == player_index or i in game_state.nominated_players:
                 mask[i] = 0
 
         return mask
@@ -219,9 +228,40 @@ class VoteAction(Action, FromIndexTargetPlayerMixin):
         # This mask is different, votes are disabled by default
         # and only voting for nominated players is allowed
         mask = torch.zeros(cls.action_size, dtype=torch.float32)
-        for index in game_state.nominated_players:
-            mask[index] = 1
+        if game_state.voting_round == 0:
+            # First round: vote for nominated players
+            for index in game_state.nominated_players:
+                mask[index] = 1
+        elif game_state.voting_round == 1:
+            # Second round: vote for tied players
+            for index in game_state.tied_players:
+                mask[index] = 1
         return mask
 
     def __repr__(self):
         return f"Player {self.player_index}. Votes: {self.target_player}"
+
+
+class EliminateAllNominatedVoteAction(Action):
+    action_size = 2  # Yes (1) or No (0)
+
+    def __init__(self, player_index, eliminate_all: bool):
+        self.player_index = player_index
+        self.eliminate_all = eliminate_all
+
+    def apply(self, game_state: "CompleteGameState"):
+        # Record the player's vote on eliminating all tied players
+        game_state.eliminate_all_votes[self.player_index] = 1 if self.eliminate_all else 0
+
+    @classmethod
+    def generate_action_mask(cls, game_state: "CompleteGameState", player_index):
+        # Always allow voting yes or no
+        return torch.ones(cls.action_size, dtype=torch.float32)
+
+    @classmethod
+    def from_index(cls, action_index, game_state, player_index):
+        # Create an instance using the action_index (0 = No, 1 = Yes)
+        return cls(player_index, eliminate_all=(action_index == 1))
+
+    def __repr__(self):
+        return f"Player {self.player_index}. Votes {'to eliminate' if self.eliminate_all else 'not to eliminate'} all tied players"

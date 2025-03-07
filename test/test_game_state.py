@@ -16,6 +16,7 @@ from mafia_game.game_state import (
     Kills,
     Nominations,
     Booleans,
+    CompleteGameState,
     )
 
 
@@ -368,3 +369,127 @@ def test_game_state_serialization_deserialization():
         game_state_1.private_data.other_mafias.other_mafias,
         game_state_2.private_data.other_mafias.other_mafias,
     )
+
+# Tests for voting rules with tie-breaking
+def test_resolve_votes_no_tie():
+    # Create a game state with 10 players
+    game = CompleteGameState.build()
+    
+    # Set up votes: player 1 gets 3 votes, player 2 gets 2 votes
+    for i in range(3):
+        game.game_states[i].public_data.votes.checks[game.turn].checks[1] = 1
+    
+    for i in range(3, 5):
+        game.game_states[i].public_data.votes.checks[game.turn].checks[2] = 1
+    
+    # Resolve votes
+    game.resolve_votes()
+    
+    # Player 1 should be eliminated
+    assert game.game_states[1].alive == 0
+    assert game.game_states[2].alive == 1  # Player 2 should still be alive
+
+def test_resolve_votes_with_tie_first_round():
+    # Create a game state with 10 players
+    game = CompleteGameState.build()
+    
+    # Set up votes: player 1 and player 2 both get 2 votes
+    for i in range(2):
+        game.game_states[i].public_data.votes.checks[game.turn].checks[1] = 1
+    
+    for i in range(2, 4):
+        game.game_states[i].public_data.votes.checks[game.turn].checks[2] = 1
+    
+    # Resolve votes - this should trigger a second round of voting
+    game.resolve_votes()
+    
+    # Both players should be in the tied_players list for second round voting
+    assert 1 in game.tied_players
+    assert 2 in game.tied_players
+    assert game.voting_round == 1  # Should be in second round
+    
+    # Both players should still be alive after first round
+    assert game.game_states[1].alive == 1
+    assert game.game_states[2].alive == 1
+
+def test_resolve_votes_second_round_no_tie():
+    # Create a game state with 10 players and set up a tie from first round
+    game = CompleteGameState.build()
+    game.tied_players = [1, 2]
+    game.voting_round = 1
+    
+    # Set up second round votes: player 1 gets 3 votes, player 2 gets 2 votes
+    for i in range(3):
+        game.game_states[i].public_data.votes.checks[game.turn].checks[1] = 1
+    
+    for i in range(3, 5):
+        game.game_states[i].public_data.votes.checks[game.turn].checks[2] = 1
+    
+    # Resolve votes for second round
+    game.resolve_votes()
+    
+    # Player 1 should be eliminated
+    assert game.game_states[1].alive == 0
+    assert game.game_states[2].alive == 1  # Player 2 should still be alive
+    assert game.voting_round == 0  # Should reset to first round
+    assert len(game.tied_players) == 0  # Tied players list should be cleared
+
+def test_resolve_votes_second_round_with_tie():
+    # Create a game state with 10 players and set up a tie from first round
+    game = CompleteGameState.build()
+    game.tied_players = [1, 2]
+    game.voting_round = 1
+    
+    # Set up second round votes: player 1 and player 2 both get 2 votes
+    for i in range(2):
+        game.game_states[i].public_data.votes.checks[game.turn].checks[1] = 1
+    
+    for i in range(2, 4):
+        game.game_states[i].public_data.votes.checks[game.turn].checks[2] = 1
+    
+    # Resolve votes for second round - this should trigger a third round
+    game.resolve_votes()
+    
+    # Both players should still be in the tied_players list
+    assert 1 in game.tied_players
+    assert 2 in game.tied_players
+    assert game.voting_round == 2  # Should be in third round
+    
+    # Both players should still be alive after second round
+    assert game.game_states[1].alive == 1
+    assert game.game_states[2].alive == 1
+
+def test_resolve_votes_third_round():
+    # Create a game state with 10 players and set up a tie from second round
+    game = CompleteGameState.build()
+    game.tied_players = [1, 2]
+    game.voting_round = 2
+    
+    # Set up third round votes (doesn't matter what the votes are)
+    for i in range(2):
+        game.game_states[i].public_data.votes.checks[game.turn].checks[1] = 1
+    
+    for i in range(2, 4):
+        game.game_states[i].public_data.votes.checks[game.turn].checks[2] = 1
+    
+    # Resolve votes for third round
+    game.resolve_votes()
+    
+    # Both tied players should be eliminated
+    assert game.game_states[1].alive == 0
+    assert game.game_states[2].alive == 0
+    assert game.voting_round == 0  # Should reset to first round
+    assert len(game.tied_players) == 0  # Tied players list should be cleared
+
+def test_resolve_votes_no_votes():
+    # Create a game state with 10 players
+    game = CompleteGameState.build()
+    
+    # No votes cast
+    
+    # Resolve votes
+    game.resolve_votes()
+    
+    # No one should be eliminated
+    for i in range(10):
+        assert game.game_states[i].alive == 1

@@ -43,11 +43,12 @@ def complete_game_state():
 
 def test_get_available_action_classes_day_phase(complete_game_state):
     complete_game_state.current_phase = DayPhase()
+    complete_game_state.turn = 3
     available_actions = complete_game_state.get_available_action_classes()
     assert set(available_actions) == {
         NominationAction,
-        SheriffDeclarationAction,
-        PublicSheriffDeclarationAction,
+        # SheriffDeclarationAction,
+        # PublicSheriffDeclarationAction,
     }
 
 

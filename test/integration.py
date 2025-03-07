@@ -12,8 +12,9 @@ from mafia_game.actions import (
     KillAction,
     DonCheckAction,
     SheriffCheckAction,
+    EliminateAllNominatedVoteAction,
     )
-from mafia_game.game_state import DayPhase
+from mafia_game.game_state import DayPhase, VotingPhase
 from mafia_game.logger import logger
 
 # Helper function to create a game state with a specific role for testing
@@ -21,8 +22,14 @@ from mafia_game.logger import logger
 # Helper function to generate a random action based on the allowed actions
 def generate_random_action(player_index, action_class, game_state):
 
-    if action_class is VoteAction and game_state.nominated_players:
+    if action_class is VoteAction and game_state.voting_round == 0 and game_state.nominated_players:
         return VoteAction(game_state.active_player, random.choice(game_state.nominated_players))
+    
+    if action_class is VoteAction and game_state.voting_round > 0 and game_state.tied_players:
+        return VoteAction(game_state.active_player, random.choice(game_state.tied_players))
+
+    if action_class is EliminateAllNominatedVoteAction:
+        return EliminateAllNominatedVoteAction(game_state.active_player, random.choice([True, False]))
 
     if action_class is SheriffDeclarationAction:
         return action_class(player_index, i_am_sheriff=random.choice([True, False]))
@@ -88,13 +95,21 @@ def test_game_runner():
                     if action:
                         logger.info(action)
                         game.execute_action(action)
-            game.active_player += 1
-            if game.active_player > 9:
-                game.active_player = 0
+                        # With the new implementation, we don't need to manually move to the next player
+                        # or check if we've gone through all players, as execute_action now handles this
+                        break
+            else:
+                # If the current player is not alive, we need to manually move to the next player
+                game.active_player += 1
+                if game.active_player > 9:
+                    game.active_player = 0
+            
+            # If we've gone through all players and returned to the starting player
             if game.active_player == started_player:
+                # This should not happen with the new implementation, but keeping as a safety check
+                game.transition_to_next_phase()
                 break
 
-        game.transition_to_next_phase()
         if isinstance(game.current_phase, DayPhase):
             logger.info('==============================')
             logger.info(f"Starting turn {game.turn}")

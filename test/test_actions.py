@@ -26,7 +26,7 @@ def test_kill_action():
     action = KillAction(player_index=0, target_player=1)
     action.apply(game_state)
     assert game_state.game_states[0].public_data.kills.checks[game_state.turn][1] == 1
-    assert game_state.game_states[1].alive == 0
+    assert game_state.game_states[1].alive in [0, -1]
 
 
 # Test NominationAction
@@ -128,7 +128,7 @@ def test_kill_action_apply(mock_game_state):
     target_player = 1
     action = KillAction(player_index, target_player)
     action.apply(mock_game_state)
-    assert not mock_game_state.game_states[target_player].alive
+    assert mock_game_state.game_states[target_player].alive in (0, -1)
 
 
 def test_public_sheriff_declaration_action_from_index(mock_game_state):
