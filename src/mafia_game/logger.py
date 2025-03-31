@@ -1,4 +1,5 @@
 import logging
+import os
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional
@@ -12,6 +13,17 @@ logging.basicConfig(
 
 # Create a logger
 logger = logging.getLogger('mafia_game')
+
+# Create a file logger
+os.makedirs('logs', exist_ok=True)
+file_handler = logging.FileHandler('logs/mafia_game.log')
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+file_logger = logging.getLogger('mafia_game_file')
+file_logger.setLevel(logging.INFO)
+file_logger.addHandler(file_handler)
+file_logger.propagate = False  # Prevent logs from being sent to the console
+
 
 class LogType(Enum):
     KILL_ACTION = "KILL_ACTION"

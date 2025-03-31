@@ -40,7 +40,7 @@ class Action(ABC):
     def generate_action_mask(cls, game_state: "CompleteGameState", player_index):
         mask = torch.ones(cls.action_size, dtype=torch.float32)
         for i, player_state in enumerate(game_state.game_states):
-            if not player_state.alive or i == player_index:
+            if not player_state.alive:
                 mask[i] = 0
 
         return mask
