@@ -27,6 +27,10 @@ class SerializeMixin:
     def serialize(self):
         serialized_data = []
         for field in fields(self):
+            # Skip agent and log fields as they're not part of persistent game state data
+            if field.name in ('agent', 'log'):
+                continue
+                
             field_value = getattr(self, field.name)
             if hasattr(field_value, "serialize"):
                 serialized_data.append(field_value.serialize())
@@ -51,12 +55,16 @@ class DeserializeMixin:
     def expected_size(cls):
         sum_of_all_sizes = 0
         for field in fields(cls):
+            # Skip agent and log fields as they're not part of persistent game state data
+            if field.name in ('agent', 'log'):
+                continue
+                
             field_type = field.type
             if hasattr(field_type, "expected_size"):
                 sum_of_all_sizes += field_type.expected_size()
             elif field_type == np.ndarray or field_type == np.array:
                 sum_of_all_sizes += field.metadata.get("size", 1)
-            elif issubclass(field_type, Enum) or field_type == int:
+            elif hasattr(field_type, '__origin__') or (isinstance(field_type, type) and issubclass(field_type, Enum)) or field_type == int:
                 sum_of_all_sizes += 1
             else:
                 raise TypeError(f"Unsupported field type: {field_type}")
@@ -68,6 +76,10 @@ class DeserializeMixin:
         idx = 0
 
         for field in fields(cls):
+            # Skip agent and log fields as they're not part of persistent game state data
+            if field.name in ('agent', 'log'):
+                continue
+                
             field_type = field.type
             if field_type == int:
                 # Deserialize integers
@@ -80,13 +92,12 @@ class DeserializeMixin:
                 )  # Use metadata to specify size if needed
                 field_value = serialized_data[idx : idx + field_size]
                 idx += field_size
-            elif issubclass(field_type, DeserializeMixin):
+            elif hasattr(field_type, "deserialize_with_index"):
                 # Recursively deserialize fields that are also DeserializeMixin
                 field_value, idx = field_type.deserialize_with_index(
                     serialized_data, idx
                 )
-
-            elif issubclass(field_type, Enum):
+            elif isinstance(field_type, type) and issubclass(field_type, Enum):
                 # Deserialize Enums
                 field_value = field_type(serialized_data[idx])
                 idx += 1

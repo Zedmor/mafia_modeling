@@ -95,6 +95,26 @@ class HumanAgent(Agent):
                 print("Incorrect input. Please try again.")
 
 
+class TestAgent(Agent):
+    """A mock agent for testing that doesn't make real LLM calls."""
+    
+    def utterance(self, target_player=None):
+        if target_player is None:
+            target_player = self.game_state.active_player
+        
+        # Just log a simple test message without making LLM calls
+        role = self.game_state.game_states[target_player].private_data.role
+        message = f"Test utterance from player {target_player} ({role.name})"
+        self.game_state.log(
+            f"Речь игрока {target_player}: {message}",
+            log_type=LogType.UTTERANCE,
+        )
+
+    def select_action(self, actions):
+        # Always select the first action for testing
+        return actions[0] if actions else NullAction(self.game_state.active_player)
+
+
 class LLMAgent(Agent):
     def get_llm_params(self, targer_player=None):
         if not targer_player:

@@ -20,7 +20,7 @@ def test_eliminate_all_nominated_vote_action_creation():
 
 def test_eliminate_all_nominated_vote_action_from_index():
     # Test creating the action from index
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     
     # Index 0 should create action with eliminate_all=False
     action = EliminateAllNominatedVoteAction.from_index(0, game, 1)
@@ -35,7 +35,7 @@ def test_eliminate_all_nominated_vote_action_from_index():
 
 def test_eliminate_all_nominated_vote_action_apply():
     # Test applying the action
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     game.tied_players = [1, 2]
     game.voting_round = 2
     
@@ -52,7 +52,7 @@ def test_eliminate_all_nominated_vote_action_apply():
 
 def test_eliminate_all_nominated_vote_action_mask():
     # Test the action mask
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     
     # The mask should always be [1, 1] (both options available)
     mask = EliminateAllNominatedVoteAction.generate_action_mask(game, 0)
@@ -61,7 +61,7 @@ def test_eliminate_all_nominated_vote_action_mask():
 
 def test_resolve_eliminate_all_vote_majority_yes():
     # Test resolving the eliminate all vote with majority yes
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     game.tied_players = [1, 2]
     game.voting_round = 2
     
@@ -84,7 +84,7 @@ def test_resolve_eliminate_all_vote_majority_yes():
 
 def test_resolve_eliminate_all_vote_majority_no():
     # Test resolving the eliminate all vote with majority no
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     game.tied_players = [1, 2]
     game.voting_round = 2
     
@@ -107,7 +107,7 @@ def test_resolve_eliminate_all_vote_majority_no():
 
 def test_resolve_eliminate_all_vote_with_dead_players():
     # Test resolving the eliminate all vote with some dead players
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     game.tied_players = [1, 2]
     game.voting_round = 2
     
@@ -129,7 +129,7 @@ def test_resolve_eliminate_all_vote_with_dead_players():
 
 def test_voting_phase_transition_with_eliminate_all_vote():
     # Test the voting phase transition with eliminate all vote
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     game.tied_players = [1, 2]
     game.voting_round = 2
     game.current_phase = VotingPhase()
@@ -151,7 +151,7 @@ def test_voting_phase_transition_with_eliminate_all_vote():
 
 def test_get_available_action_classes_in_third_voting_round():
     # Test getting available action classes in third voting round
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     game.tied_players = [1, 2]
     game.voting_round = 2
     game.current_phase = VotingPhase()
@@ -166,7 +166,7 @@ def test_get_available_action_classes_in_third_voting_round():
 
 def test_full_voting_sequence_with_eliminate_all():
     # Test a full voting sequence ending with eliminate all vote
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     game.nominated_players = [1, 2]
     game.current_phase = VotingPhase()
     

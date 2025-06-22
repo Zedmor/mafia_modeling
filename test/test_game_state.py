@@ -373,7 +373,7 @@ def test_game_state_serialization_deserialization():
 # Tests for voting rules with tie-breaking
 def test_resolve_votes_no_tie():
     # Create a game state with 10 players
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     
     # Set up votes: player 1 gets 3 votes, player 2 gets 2 votes
     for i in range(3):
@@ -391,7 +391,7 @@ def test_resolve_votes_no_tie():
 
 def test_resolve_votes_with_tie_first_round():
     # Create a game state with 10 players
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     
     # Set up votes: player 1 and player 2 both get 2 votes
     for i in range(2):
@@ -414,7 +414,7 @@ def test_resolve_votes_with_tie_first_round():
 
 def test_resolve_votes_second_round_no_tie():
     # Create a game state with 10 players and set up a tie from first round
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     game.tied_players = [1, 2]
     game.voting_round = 1
     
@@ -436,7 +436,7 @@ def test_resolve_votes_second_round_no_tie():
 
 def test_resolve_votes_second_round_with_tie():
     # Create a game state with 10 players and set up a tie from first round
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     game.tied_players = [1, 2]
     game.voting_round = 1
     
@@ -461,19 +461,17 @@ def test_resolve_votes_second_round_with_tie():
 
 def test_resolve_votes_third_round():
     # Create a game state with 10 players and set up a tie from second round
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     game.tied_players = [1, 2]
     game.voting_round = 2
     
-    # Set up third round votes (doesn't matter what the votes are)
-    for i in range(2):
-        game.game_states[i].public_data.votes.checks[game.turn].checks[1] = 1
+    # In the third round, players vote yes/no to eliminate all tied players
+    # Set up 6 yes votes (majority) to eliminate all tied players
+    for i in range(6):
+        game.eliminate_all_votes[i] = 1  # Vote yes to eliminate all
     
-    for i in range(2, 4):
-        game.game_states[i].public_data.votes.checks[game.turn].checks[2] = 1
-    
-    # Resolve votes for third round
-    game.resolve_votes()
+    # Resolve eliminate all vote for third round
+    game.resolve_eliminate_all_vote()
     
     # Both tied players should be eliminated
     assert game.game_states[1].alive == 0
@@ -483,7 +481,7 @@ def test_resolve_votes_third_round():
 
 def test_resolve_votes_no_votes():
     # Create a game state with 10 players
-    game = CompleteGameState.build()
+    game = CompleteGameState.build(use_test_agents=True)
     
     # No votes cast
     

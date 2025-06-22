@@ -15,7 +15,7 @@ from mafia_game.actions import (
     SheriffDeclarationAction,
     VoteAction,
 )
-from mafia_game.agent import Agent, HumanAgent, LLMAgent
+from mafia_game.agent import Agent, HumanAgent, LLMAgent, TestAgent
 from mafia_game.common import (
     ARRAY_SIZE,
     Beliefs,
@@ -82,7 +82,7 @@ class PublicData(SerializeMixin, DeserializeMixin):
 class GameState(SerializeMixin, DeserializeMixin):
     private_data: PrivateData
     public_data: PublicData
-    agent: Agent
+    agent: Agent = field(default=None)
     alive: int = field(default=1)
 
     def set_winner(self, team: Team):
@@ -354,7 +354,7 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
         return self.game_states[self.active_player]
 
     @staticmethod
-    def build(human_player: Role = None):
+    def build(human_player: Role = None, use_test_agents: bool = False):
         game_states = [
             create_game_state_with_role(r)
             for r in [Role.CITIZEN] * 6 + [Role.SHERIFF] + [Role.MAFIA] * 2 + [Role.DON]
@@ -391,7 +391,10 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
                 player.agent = HumanAgent(game_state)
                 need_to_deploy_human = False
             else:
-                player.agent = LLMAgent(game_state)
+                if use_test_agents:
+                    player.agent = TestAgent(game_state)
+                else:
+                    player.agent = LLMAgent(game_state)
 
         game_state.log("Игра инициализирована", log_type=LogType.GAME_STATE)
         game_state.log(

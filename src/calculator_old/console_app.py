@@ -285,51 +285,93 @@ def main(stdscr):
         stdscr.refresh()
 
 
-def process_input_lines(stdscr, app_state):
-    player_id = app_state.current_player
-    player_lines = app_state.lines[player_id]
-    # Clear existing beliefs for the player
-    app_state.game.players[player_id].beliefs.clear()
-
-    # Process all input lines for the player and update beliefs
-    for line in player_lines:
-        parts = line.split()
-        for part in parts:
-            # Find the index where the digits end and the belief code starts
-            index = next(
-                (i for i, char in enumerate(part) if not char.isdigit()), len(part)
+def process_input_lines(game_or_stdscr, player_id_or_app_state, player_lines=None):
+    """
+    Overloaded function that supports both the console app API and the test API.
+    
+    Console app API: process_input_lines(stdscr, app_state)
+    Test API: process_input_lines(game, player_id, player_lines)
+    """
+    if player_lines is not None:
+        # Test API: process_input_lines(game, player_id, player_lines)
+        game = game_or_stdscr
+        player_id = player_id_or_app_state
+        
+        # Clear existing beliefs for the player
+        game.players[player_id].beliefs.clear()
+        
+        # Process all input lines for the player and update beliefs
+        for line in player_lines:
+            parts = line.split()
+            for part in parts:
+                # Find the index where the digits end and the belief code starts
+                index = next(
+                    (i for i, char in enumerate(part) if not char.isdigit()), len(part)
                 )
-            try:
-                target_player_id = int(part[:index]) - 1  # Convert to zero-based index
-                if target_player_id >= app_state.num_players or target_player_id < 0:
-                    raise ValueError
-                belief_code = part[index:]
-                if belief_code in belief_strength_mapping:
-                    belief_strength = belief_strength_mapping[belief_code]
-                    belief_type = (
-                        BeliefType.RED if belief_strength > 0 else BeliefType.BLACK
-                    )
-                    app_state.game.players[player_id].record_belief(
-                        target_player_id, belief_type, abs(belief_strength)
+                try:
+                    target_player_id = int(part[:index]) - 1  # Convert to zero-based index
+                    if target_player_id >= len(game.players) or target_player_id < 0:
+                        raise ValueError
+                    belief_code = part[index:]
+                    if belief_code in belief_strength_mapping:
+                        belief_strength = belief_strength_mapping[belief_code]
+                        belief_type = (
+                            BeliefType.RED if belief_strength > 0 else BeliefType.BLACK
                         )
-            except (ValueError, IndexError):
-                pass  # Ignore invalid input
-    vertical_offset = len(app_state.game.players) + 2  # Adjust if you have a header
-    line_y_position = (
-            vertical_offset
-            + sum(len(app_state.lines[i]) for i in range(player_id))
-            + app_state.current_line
-    )
-    # Change the color of the current processed line
-    stdscr.chgat(
-        line_y_position,  # Correct y position for the current line
-        0,  # x position (start of the line)
-        -1,  # -1 means apply the attribute change across the entire line
-        curses.color_pair(4),  # Color pair for processed lines
-        )
+                        game.players[player_id].record_belief(
+                            target_player_id, belief_type, abs(belief_strength)
+                        )
+                except (ValueError, IndexError):
+                    pass  # Ignore invalid input
+    else:
+        # Console app API: process_input_lines(stdscr, app_state)
+        stdscr = game_or_stdscr
+        app_state = player_id_or_app_state
+        
+        player_id = app_state.current_player
+        player_lines = app_state.lines[player_id]
+        # Clear existing beliefs for the player
+        app_state.game.players[player_id].beliefs.clear()
 
-    # Refresh the screen to reflect the changes
-    stdscr.refresh()
+        # Process all input lines for the player and update beliefs
+        for line in player_lines:
+            parts = line.split()
+            for part in parts:
+                # Find the index where the digits end and the belief code starts
+                index = next(
+                    (i for i, char in enumerate(part) if not char.isdigit()), len(part)
+                    )
+                try:
+                    target_player_id = int(part[:index]) - 1  # Convert to zero-based index
+                    if target_player_id >= app_state.num_players or target_player_id < 0:
+                        raise ValueError
+                    belief_code = part[index:]
+                    if belief_code in belief_strength_mapping:
+                        belief_strength = belief_strength_mapping[belief_code]
+                        belief_type = (
+                            BeliefType.RED if belief_strength > 0 else BeliefType.BLACK
+                        )
+                        app_state.game.players[player_id].record_belief(
+                            target_player_id, belief_type, abs(belief_strength)
+                            )
+                except (ValueError, IndexError):
+                    pass  # Ignore invalid input
+        vertical_offset = len(app_state.game.players) + 2  # Adjust if you have a header
+        line_y_position = (
+                vertical_offset
+                + sum(len(app_state.lines[i]) for i in range(player_id))
+                + app_state.current_line
+        )
+        # Change the color of the current processed line
+        stdscr.chgat(
+            line_y_position,  # Correct y position for the current line
+            0,  # x position (start of the line)
+            -1,  # -1 means apply the attribute change across the entire line
+            curses.color_pair(4),  # Color pair for processed lines
+            )
+
+        # Refresh the screen to reflect the changes
+        stdscr.refresh()
 
 
 if __name__ == "__main__":
