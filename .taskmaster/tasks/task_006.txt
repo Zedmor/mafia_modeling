@@ -1,0 +1,37 @@
+# Task ID: 6
+# Title: Develop PPO Training Loop
+# Status: pending
+# Dependencies: 2, 4, 5
+# Priority: high
+# Description: Implement PPO training algorithm for the transformer using TokenMafiaEnv with legal action masking and entropy regularization
+# Details:
+PPO with clip=0.2, entropy=0.01, factorized action space handling, reward normalization for sparse +1/-1 rewards. Support single-agent vs random and self-play modes. Target: ≥80% win rate vs random in 48 hours on 1 GPU.
+
+# Test Strategy:
+Training stability validation, convergence verification, win rate achievement, legal action handling
+
+# Subtasks:
+## 1. Implement Core PPO Algorithm [pending]
+### Dependencies: None
+### Description: Create PPO training loop with TokenMafiaEnv integration and factorized action handling
+### Details:
+
+
+## 2. Add Legal Action Masking in Training [pending]
+### Dependencies: 6.1
+### Description: Integrate legal action masking into PPO policy updates and gradient computation
+### Details:
+
+
+## 3. Implement Training Modes and Logging [pending]
+### Dependencies: 6.2
+### Description: Add single-agent vs random and self-play modes with comprehensive metric logging
+### Details:
+
+
+## 4. Validate Performance Target [pending]
+### Dependencies: 6.3
+### Description: Achieve ≥80% win rate vs random baseline within 48 hours on 1 GPU
+### Details:
+
+

@@ -14,6 +14,7 @@ from mafia_game.actions import (
     SheriffCheckAction,
     SheriffDeclarationAction,
     VoteAction,
+    SayAction,
 )
 from mafia_game.agent import Agent, HumanAgent, LLMAgent, TestAgent
 from mafia_game.common import (
@@ -122,6 +123,7 @@ class DayPhase(Phase):
         NominationAction,
         SheriffDeclarationAction,
         PublicSheriffDeclarationAction,
+        SayAction,
         NullAction,
     ]
 
@@ -137,8 +139,25 @@ class DayPhase(Phase):
 
 
 class VotingPhase(Phase):
-    allowed_actions = [VoteAction, EliminateAllNominatedVoteAction, NullAction]
+    allowed_actions = [VoteAction, EliminateAllNominatedVoteAction]  # No NullAction - players must vote
     value = 1
+
+    def execute_action(self, game_state: "CompleteGameState", action):
+        # Allow NullAction for dead players giving speeches, even during voting phase
+        if isinstance(action, NullAction):
+            player_is_dead = not game_state.game_states[action.player_index].alive
+            if player_is_dead:
+                # Dead players can always end their speech with NullAction
+                action.apply(game_state)
+                return
+            else:
+                # Alive players cannot abstain during voting - they must vote
+                raise ValueError(
+                    f"Action {action.__class__} is not allowed during {self.__class__} phase"
+                )
+        
+        # Use parent method for all other actions
+        super().execute_action(game_state, action)
 
     def next_phase(self, game_state: "CompleteGameState"):
         # Resolve votes and transition to the night kill phase
@@ -161,6 +180,12 @@ class VotingPhase(Phase):
                     "Никто не был номинирован. Пропуск голосования.",
                     log_type=LogType.VOTE_RESULT,
                 )
+                # Auto-skip to night phase when no nominations
+                game_state.log(
+                    "Переход из Фазы Голосования в Ночную Фазу Убийства",
+                    log_type=LogType.PHASE_CHANGE,
+                )
+                return NightKillPhase()
         elif game_state.voting_round == 1:
             # Second voting round
             game_state.resolve_votes()
@@ -239,40 +264,12 @@ class NightSheriffPhase(Phase):
 
 
 class EndPhase(Phase):
-    allowed_actions = [NullAction]
+    allowed_actions = []  # No actions allowed in EndPhase
     value = 5
 
     def next_phase(self, game_state: "CompleteGameState"):
-        for n, player in enumerate(game_state.game_states):
-            if player.alive == -1:
-                player.alive = 0  # Player killed during the night dead for good
-                game_state.log(
-                    f"Игрок {n} был убит ночью", log_type=LogType.ELIMINATION
-                )
-                game_state.game_states[n].agent.utterance(n)
-
-        # Resolve votes and transition to the night kill phase
-        game_state.check_end_conditions()
-        game_state.turn += 1
-        while True:
-            game_state.active_player += 1
-            if game_state.active_player > 9:
-                game_state.active_player = 0
-            if game_state.game_states[game_state.active_player].alive:
-                break
-
-        alive_players = [
-            i for i, game_state in enumerate(game_state.game_states) if game_state.alive
-        ]
-        game_state.log(
-            f"Конец хода {game_state.turn-1}. Живые игроки: {alive_players}",
-            log_type=LogType.GAME_STATE,
-        )
-        game_state.log(
-            f"Начало хода {game_state.turn}. Первый игрок: {game_state.active_player}",
-            log_type=LogType.GAME_STATE,
-        )
-
+        # EndPhase processing is now handled by _process_end_phase() in transition_to_next_phase()
+        # This method just returns the next phase without doing any processing
         return DayPhase()
 
     def __repr__(self):
@@ -291,21 +288,26 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
     )
 
     current_phase: Phase = field(default_factory=DayPhase)
-    voting_round: int = 0
     active_player: int = 0
     turn: int = field(default=0)
     team_won: Team = field(default=Team.UNKNOWN)
     nominated_players: list = field(default_factory=list)
     phase_start_player: int = field(
-        default=0
+        default=-1
     )  # Track the player who started the current phase
     voting_round: int = field(
         default=0
     )  # Track which voting round we're in (0=first, 1=second, 2=third)
+    phase_actions_count: int = field(
+        default=0
+    )  # Track how many actions have been taken in the current phase
     tied_players: list = field(default_factory=list)  # Track players who tied in voting
     eliminate_all_votes: np.array = field(
         default_factory=lambda: np.zeros(MAX_PLAYERS, dtype=int)
     )  # Track votes for eliminating all tied players
+    day_starter_backup: int = field(
+        default=-1
+    )  # Backup of the intended day starter before switching to dead player for final speech
     game_log: List[LogMessage] = field(default_factory=list)  # Global game log
 
     def log(
@@ -376,7 +378,7 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
             game_states=game_states,
             current_phase=DayPhase(),
             active_player=0,
-            phase_start_player=0,
+            phase_start_player=-1,
             turn=0,
             team_won=Team.UNKNOWN,
         )
@@ -413,6 +415,9 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
                 self.phase_start_player = i
                 break
 
+        # Reset the phase action count for the new voting round
+        self.phase_actions_count = 0
+
         self.log(
             f"Сброс активного игрока на {self.active_player} для нового раунда голосования",
             log_type=LogType.GAME_STATE,
@@ -437,6 +442,16 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
         # Serialize each GameState object and concatenate them
         game_states = [game_state.serialize() for game_state in self.game_states]
 
+        # Serialize nominated_players list (pad to MAX_PLAYERS length)
+        nominated_array = np.full(MAX_PLAYERS, -1, dtype=int)
+        for i, player_id in enumerate(self.nominated_players[:MAX_PLAYERS]):
+            nominated_array[i] = player_id
+
+        # Serialize tied_players list (pad to MAX_PLAYERS length) 
+        tied_array = np.full(MAX_PLAYERS, -1, dtype=int)
+        for i, player_id in enumerate(self.tied_players[:MAX_PLAYERS]):
+            tied_array[i] = player_id
+
         serialized_state = np.concatenate(
             [
                 np.concatenate(game_states),
@@ -444,6 +459,13 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
                 np.array([self.current_phase.value]),
                 np.array([self.turn]),
                 np.array([self.team_won.value]),
+                np.array([self.phase_start_player]),
+                np.array([self.voting_round]),
+                np.array([self.phase_actions_count]),
+                np.array([self.day_starter_backup]),
+                nominated_array,
+                tied_array,
+                self.eliminate_all_votes,
             ]
         )
         return serialized_state
@@ -462,12 +484,14 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
     @staticmethod
     def deserialize(serialized_state: np.ndarray):
         # Deserialize the complete game state into individual GameState objects
-        # CompleteGameState is [GameState * MAX_PLAYERS, game_phase, active_player]
-        if serialized_state.size != ARRAY_SIZE * MAX_PLAYERS + 4:
+        # CompleteGameState is [GameState * MAX_PLAYERS, active_player, game_phase, turn, team_won, phase_start_player, voting_round, phase_actions_count, day_starter_backup, nominated_array, tied_array, eliminate_all_votes]
+        expected_size = ARRAY_SIZE * MAX_PLAYERS + 8 + (3 * MAX_PLAYERS)  # 8 single values + 3 arrays of MAX_PLAYERS each
+        if serialized_state.size != expected_size:
             raise ValueError(
-                f"Serialized state must have a size of {ARRAY_SIZE * MAX_PLAYERS + 4}"
+                f"Serialized state must have a size of {expected_size}, got {serialized_state.size}"
             )
 
+        # Deserialize game states
         game_states = []
         for i in range(MAX_PLAYERS):
             start_idx = i * ARRAY_SIZE
@@ -475,10 +499,33 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
             game_state = GameState.deserialize(serialized_state[start_idx:end_idx])
             game_states.append(game_state)
 
-        active_player = int(serialized_state[-4])
-        game_phase = Phase.from_value(serialized_state[-3])
-        turn = int(serialized_state[-2])
-        team_won = Team(serialized_state[-1])
+        # Calculate indices for the additional fields
+        base_idx = ARRAY_SIZE * MAX_PLAYERS
+        active_player = int(serialized_state[base_idx])
+        game_phase = Phase.from_value(serialized_state[base_idx + 1])
+        turn = int(serialized_state[base_idx + 2])
+        team_won = Team(serialized_state[base_idx + 3])
+        phase_start_player = int(serialized_state[base_idx + 4])
+        voting_round = int(serialized_state[base_idx + 5])
+        phase_actions_count = int(serialized_state[base_idx + 6])
+        day_starter_backup = int(serialized_state[base_idx + 7])
+        
+        # Deserialize nominated_players (next MAX_PLAYERS elements)
+        nominated_start = base_idx + 8
+        nominated_end = nominated_start + MAX_PLAYERS
+        nominated_array = serialized_state[nominated_start:nominated_end]
+        nominated_players = [int(p) for p in nominated_array if p != -1]
+        
+        # Deserialize tied_players (next MAX_PLAYERS elements)
+        tied_start = nominated_end
+        tied_end = tied_start + MAX_PLAYERS
+        tied_array = serialized_state[tied_start:tied_end]
+        tied_players = [int(p) for p in tied_array if p != -1]
+        
+        # Deserialize eliminate_all_votes (next MAX_PLAYERS elements)
+        votes_start = tied_end
+        votes_end = votes_start + MAX_PLAYERS
+        eliminate_all_votes = serialized_state[votes_start:votes_end].astype(int)
 
         return CompleteGameState(
             game_states=game_states,
@@ -486,7 +533,13 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
             active_player=active_player,
             team_won=team_won,
             turn=turn,
-            phase_start_player=active_player,  # Initialize phase_start_player to active_player
+            phase_start_player=phase_start_player,
+            voting_round=voting_round,
+            phase_actions_count=phase_actions_count,
+            day_starter_backup=day_starter_backup,
+            nominated_players=nominated_players,
+            tied_players=tied_players,
+            eliminate_all_votes=eliminate_all_votes,
         )
 
     def deserialize_from(self, player_index: int):
@@ -521,6 +574,14 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
                 killer = i
             if state.private_data.role == Role.DON and state.alive:
                 killer = i
+        
+        # Debug: log the killer finding process
+        if killer == -1:
+            alive_roles = [(i, state.private_data.role, state.alive) for i, state in enumerate(self.game_states) if state.alive]
+            self.log(f"DEBUG: No killer found. Alive players: {alive_roles}", log_type=LogType.GAME_STATE)
+        else:
+            self.log(f"DEBUG: Killer found: Player {killer} (Role: {self.game_states[killer].private_data.role})", log_type=LogType.GAME_STATE)
+        
         return killer
 
     def get_available_action_classes(self):
@@ -529,11 +590,12 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
         active_player_role = active_player_state.private_data.role
         available_action_classes = []
 
-        if isinstance(self.current_phase, DayPhase) and self.turn != 0:
+        if isinstance(self.current_phase, DayPhase):
             # During the day, all players can make declarations and nominations
             available_action_classes.append(NominationAction)
-            # available_action_classes.append(SheriffDeclarationAction)
-            # available_action_classes.append(PublicSheriffDeclarationAction)
+            available_action_classes.append(SheriffDeclarationAction)
+            available_action_classes.append(PublicSheriffDeclarationAction)
+            available_action_classes.append(SayAction)
 
         elif isinstance(self.current_phase, VotingPhase):
             # During the voting phase, players vote for nominated players
@@ -582,13 +644,15 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
                     )
                     actions.append(action)
 
-        if self.current_phase.value == VotingPhase.value and (
-            (self.voting_round == 0 and self.nominated_players)
-            or (self.voting_round == 1 and self.tied_players)
-            or self.voting_round == 2
-        ):
+        # During voting phase, players cannot abstain - they must vote
+        if self.current_phase.value == VotingPhase.value:
             return actions
 
+        # During EndPhase, no actions are allowed - return empty list
+        if isinstance(self.current_phase, EndPhase):
+            return actions  # Empty list
+
+        # For all other phases, allow NullAction (abstaining)
         actions.append(NullAction(self.active_player))
         return actions
 
@@ -606,29 +670,227 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
             target_player = getattr(action, "target_player", None)
             # self.log(str(action), log_type=LogType.ACTION, player_index=player_index, target_player=target_player)
 
-        # Move to the next alive player
-        original_player = self.active_player
-        while True:
-            self.active_player = (self.active_player + 1) % MAX_PLAYERS
-            # If we've gone through all players and returned to the starting player
+        # Increment the phase action count
+        self.phase_actions_count += 1
+
+        # Handle phase transitions based on phase type
+        if isinstance(self.current_phase, VotingPhase):
+            # Move to next alive player for voting
+            original_player = self.active_player
+            while True:
+                self.active_player = (self.active_player + 1) % MAX_PLAYERS
+                if self.game_states[self.active_player].alive:
+                    break
+                if self.active_player == original_player:
+                    break  # No alive players (shouldn't happen)
+            
+            # Check if all alive players have voted
+            alive_players_count = sum(1 for state in self.game_states if state.alive)
+            if self.phase_actions_count >= alive_players_count:
+                self.resolve_voting_and_transition()
+                return
+                
+        elif isinstance(self.current_phase, DayPhase):
+            # Check if this is a final speech situation (dead player taking any action)
+            if not self.game_states[self.active_player].alive:
+                # This is a dead player acting - restore the intended day starter from backup after any action
+                # Restore the intended day starter from backup
+                if self.day_starter_backup != -1:
+                    self.active_player = self.day_starter_backup
+                    self.phase_start_player = self.day_starter_backup
+                    self.phase_actions_count = 0
+                    self.day_starter_backup = -1  # Clear the backup
+                    
+                    self.log(
+                        f"После действия убитого игрока, переход к нормальной дневной фазе. Активный игрок: {self.active_player}",
+                        log_type=LogType.GAME_STATE,
+                    )
+                else:
+                    # Fallback if no backup - transition to next phase
+                    self.transition_to_next_phase()
+                return
+                
+            # Normal day phase - move to next alive player
+            original_player = self.active_player
+            while True:
+                self.active_player = (self.active_player + 1) % MAX_PLAYERS
+                if self.game_states[self.active_player].alive:
+                    break
+                if self.active_player == original_player:
+                    break  # No alive players (shouldn't happen)
+            
+            # Check if we've completed a full cycle through all alive players
             if self.active_player == self.phase_start_player:
-                # Transition to the next phase
                 self.transition_to_next_phase()
-                # Reset phase_start_player for the new phase
-                self.phase_start_player = self.active_player
-                break
-            # If we found an alive player, stop searching
-            if self.game_states[self.active_player].alive:
-                break
-            # If we've checked all players and none are alive (shouldn't happen in normal gameplay)
-            if self.active_player == original_player:
-                break
+        
+        elif isinstance(self.current_phase, (NightKillPhase, NightDonPhase, NightSheriffPhase)):
+            # Night phases are role-specific, not round-robin
+            # Transition immediately after the role-holder acts (or skips)
+            phase_name = self.current_phase.__class__.__name__
+            self.log(f"DEBUG: Night phase action completed in {phase_name}, transitioning to next phase", log_type=LogType.GAME_STATE)
+            self.transition_to_next_phase()
+            
+        elif isinstance(self.current_phase, EndPhase):
+            # EndPhase should complete automatically
+            self.transition_to_next_phase()
+
+    def resolve_voting_and_transition(self):
+        """Resolve votes and transition to the next phase for voting phases"""
+        # This method is called when all players have voted in a voting phase
+        # Let the VotingPhase.next_phase() handle the vote resolution
+        self.transition_to_next_phase()
 
     def transition_to_next_phase(self):
         old_phase = self.current_phase
-        self.current_phase = self.current_phase.next_phase(self)
-        # Reset the phase_start_player for the new phase
-        self.phase_start_player = self.active_player
+        new_phase = self.current_phase.next_phase(self)
+        
+        # Check if we're staying in the same phase type (e.g., VotingPhase -> VotingPhase for tie-breaking)
+        staying_in_same_phase_type = type(old_phase) == type(new_phase)
+        
+        self.current_phase = new_phase
+        
+        # Auto-skip VotingPhase if there are no nominations
+        if isinstance(new_phase, VotingPhase) and not self.nominated_players:
+            self.log(
+                "Никто не был номинирован. Автоматический пропуск фазы голосования.",
+                log_type=LogType.VOTE_RESULT,
+            )
+            self.log(
+                "Переход из Фазы Голосования в Ночную Фазу Убийства",
+                log_type=LogType.PHASE_CHANGE,
+            )
+            self.current_phase = NightKillPhase()
+            new_phase = self.current_phase
+        
+        # Set active player for night phases when transitioning INTO them
+        if isinstance(new_phase, NightKillPhase):
+            # Set active player to killer for kill phase
+            killer_index = self.index_of_night_killer()
+            self.log(f"DEBUG: Transitioning to NightKillPhase, killer_index={killer_index}", log_type=LogType.GAME_STATE)
+            if killer_index != -1:
+                self.active_player = killer_index
+                self.log(f"DEBUG: Set active player to {killer_index} for NightKillPhase", log_type=LogType.GAME_STATE)
+            else:
+                # No mafia alive, skip this phase automatically
+                self.log(f"DEBUG: No killer found, skipping NightKillPhase", log_type=LogType.GAME_STATE)
+                self.transition_to_next_phase()
+                return
+                
+        elif isinstance(new_phase, NightDonPhase):
+            # Set active player to Don for don check phase
+            don_index = -1
+            for i, state in enumerate(self.game_states):
+                if state.private_data.role == Role.DON and state.alive:
+                    don_index = i
+                    break
+            if don_index != -1:
+                self.active_player = don_index
+            else:
+                # No Don alive, skip this phase automatically
+                self.transition_to_next_phase()
+                return
+                
+        elif isinstance(new_phase, NightSheriffPhase):
+            # Set active player to Sheriff for sheriff check phase
+            sheriff_index = -1
+            for i, state in enumerate(self.game_states):
+                if state.private_data.role == Role.SHERIFF and state.alive:
+                    sheriff_index = i
+                    break
+            if sheriff_index != -1:
+                self.active_player = sheriff_index
+            else:
+                # No Sheriff alive, skip this phase automatically
+                self.transition_to_next_phase()
+                return
+        
+        # Only reset phase tracking when transitioning to a different phase type
+        # If we're staying in the same phase (e.g., tie-breaking voting), preserve the tracking set by reset methods
+        if not staying_in_same_phase_type:
+            self.phase_start_player = -1
+            self.phase_actions_count = 0
+            
+        # Handle EndPhase immediate transition - EndPhase should not wait for actions
+        if isinstance(new_phase, EndPhase):
+            # Process end phase immediately (kill players, check win conditions, advance turn)
+            self._process_end_phase()
+            # Then transition to next phase (DayPhase for next turn)
+            self.transition_to_next_phase()
+    
+    def _process_end_phase(self):
+        """Process the end phase logic: kill players, check win conditions, advance turn"""
+        # Check if any players died during the night and will need death speeches
+        killed_players = []
+        for n, player in enumerate(self.game_states):
+            if player.alive == -1:
+                killed_players.append(n)
+        
+        # Kill players who were marked for death during the night
+        for n, player in enumerate(self.game_states):
+            if player.alive == -1:
+                player.alive = 0  # Player killed during the night dead for good
+                self.log(
+                    f"Игрок {n} был убит ночью", log_type=LogType.ELIMINATION
+                )
+                # Only call utterance if agent exists (avoid None agent error)
+                if self.game_states[n].agent is not None:
+                    self.game_states[n].agent.utterance(n)
+
+        # Check win conditions
+        self.check_end_conditions()
+        
+        # If game hasn't ended, advance to next turn
+        if self.team_won == Team.UNKNOWN:
+            # Store the current turn's starting player
+            current_turn_start_player = 0 if self.turn == 0 else (self.turn % MAX_PLAYERS)
+            
+            self.turn += 1
+            
+            # Find next alive player to start the new day based on turn rotation
+            # Next turn should start with (current_turn_start_player + 1) % MAX_PLAYERS
+            next_start_player = (current_turn_start_player + 1) % MAX_PLAYERS
+            
+            # Find the next alive player starting from the calculated position
+            attempts = 0
+            while attempts < MAX_PLAYERS:
+                if self.game_states[next_start_player].alive:
+                    intended_day_starter = next_start_player
+                    break
+                next_start_player = (next_start_player + 1) % MAX_PLAYERS
+                attempts += 1
+            
+            # Fallback: if no player found (shouldn't happen), find first alive player
+            if attempts >= MAX_PLAYERS:
+                for i in range(MAX_PLAYERS):
+                    if self.game_states[i].alive:
+                        intended_day_starter = i
+                        break
+            
+            # Save the intended day starter before any potential death speeches
+            self.day_starter_backup = intended_day_starter
+            
+            # If there are killed players, first dead player becomes active for death speech
+            # Otherwise, intended day starter becomes active immediately
+            if killed_players:
+                self.active_player = killed_players[0]  # First killed player gives death speech
+                self.log(
+                    f"Игрок {killed_players[0]} был убит и получает последнее слово",
+                    log_type=LogType.GAME_STATE,
+                )
+            else:
+                self.active_player = intended_day_starter
+
+            alive_players = [
+                i for i, game_state in enumerate(self.game_states) if game_state.alive
+            ]
+            self.log(
+                f"Конец хода {self.turn-1}. Живые игроки: {alive_players}",
+                log_type=LogType.GAME_STATE,
+            )
+            self.log(
+                f"Начало хода {self.turn}. Первый игрок для дня: {intended_day_starter}, активный игрок: {self.active_player}",
+                log_type=LogType.GAME_STATE,
+            )
 
     def resolve_votes(self):
         # Count the votes for each player
@@ -805,6 +1067,52 @@ class CompleteGameState(SerializeMixin, DeserializeMixin):
     def final_speech(self):
         """Implement final speech of a player that goes to the public log"""
         pass
+
+    def _set_night_phase_active_player(self):
+        """Set the active player for the upcoming night phase based on phase type and alive roles"""
+        next_phase = self.current_phase.next_phase(self)
+        
+        if isinstance(next_phase, NightKillPhase):
+            # Set active player to mafia/don killer
+            killer_index = self.index_of_night_killer()
+            if killer_index != -1:
+                self.active_player = killer_index
+            else:
+                # No mafia alive, skip to next phase
+                self.active_player = 0  # Default fallback
+                
+        elif isinstance(next_phase, NightDonPhase):
+            # Set active player to Don (if alive)
+            don_index = -1
+            for i, state in enumerate(self.game_states):
+                if state.private_data.role == Role.DON and state.alive:
+                    don_index = i
+                    break
+            if don_index != -1:
+                self.active_player = don_index
+            else:
+                # No Don alive, will skip this phase automatically
+                self.active_player = 0  # Default fallback
+                
+        elif isinstance(next_phase, NightSheriffPhase):
+            # Set active player to Sheriff (if alive)
+            sheriff_index = -1
+            for i, state in enumerate(self.game_states):
+                if state.private_data.role == Role.SHERIFF and state.alive:
+                    sheriff_index = i
+                    break
+            if sheriff_index != -1:
+                self.active_player = sheriff_index
+            else:
+                # No Sheriff alive, will skip this phase automatically
+                self.active_player = 0  # Default fallback
+                
+        elif isinstance(next_phase, EndPhase):
+            # Find first alive player for end phase
+            for i in range(MAX_PLAYERS):
+                if self.game_states[i].alive:
+                    self.active_player = i
+                    break
 
 
 def create_game_state_with_role(role: Role, alive: bool = True):

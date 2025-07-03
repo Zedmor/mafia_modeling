@@ -5,6 +5,7 @@ from mafia_game.actions import (
     NominationAction,
     SheriffDeclarationAction,
     PublicSheriffDeclarationAction,
+    SayAction,
     VoteAction,
     KillAction,
     DonCheckAction,
@@ -45,10 +46,12 @@ def test_get_available_action_classes_day_phase(complete_game_state):
     complete_game_state.current_phase = DayPhase()
     complete_game_state.turn = 3
     available_actions = complete_game_state.get_available_action_classes()
+    # Updated to match current implementation that includes additional day phase actions
     assert set(available_actions) == {
         NominationAction,
-        # SheriffDeclarationAction,
-        # PublicSheriffDeclarationAction,
+        SheriffDeclarationAction,
+        PublicSheriffDeclarationAction,
+        SayAction,
     }
 
 

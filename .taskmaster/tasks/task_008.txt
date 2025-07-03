@@ -1,0 +1,31 @@
+# Task ID: 8
+# Title: Implement Self-Play and Historical Opponents
+# Status: pending
+# Dependencies: 6, 7
+# Priority: medium
+# Description: Create prioritized fictitious self-play (PFSP) system with historical opponent pool for diverse training experiences
+# Details:
+Implement opponent pool management, checkpoint freezing every 1M steps, prioritized sampling based on win rates, diversity metrics (KL > 0.3), and Elo tracking. Prevent strategy cycling through regularization.
+
+# Test Strategy:
+Diversity metric validation, Elo progression tracking, opponent pool effectiveness measurement
+
+# Subtasks:
+## 1. Implement Opponent Pool Management [pending]
+### Dependencies: None
+### Description: Create system for storing and managing historical policy checkpoints
+### Details:
+
+
+## 2. Add Prioritized Sampling [pending]
+### Dependencies: 8.1
+### Description: Implement PFSP sampling based on win rates and diversity metrics
+### Details:
+
+
+## 3. Create Elo Tracking and Metrics [pending]
+### Dependencies: 8.2
+### Description: Add Elo rating system and diversity metrics (KL divergence) for opponent evaluation
+### Details:
+
+

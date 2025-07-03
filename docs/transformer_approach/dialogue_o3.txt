@@ -1,0 +1,2123 @@
+I heard about projects where transformer architecture network been teached via self play to play two player zero sum games. Could you provide me a research on how I can do that. I have a game which is too computationally complex to solve with mcts or something like that. But game process could be codified in player moves and there’s clear outcome of the game. How I cal leverage transformer architecture and modern Ilm research for that?
+
+ChatGPT said:
+To help you best, could you please clarify the following:
+
+What kind of two-player zero-sum game are you working with? Is it turn-based, simultaneous moves, or something else?
+
+Do you want the transformer to learn purely through self-play, or will it have access to prior data or human play examples?
+
+Are you interested in offline training (precomputed dataset) or online learning (training while playing)?
+
+Do you have constraints like limited computing resources or a preferred programming framework (e.g., PyTorch, TensorFlow)?
+
+Once I have this information, I can gather detailed and targeted guidance for using transformer architectures and modern ILM (Interactive Learning Methods?) in your game setting.
+
+
+
+
+
+
+
+
+You said:
+It is a turn base mafia game : https://en.wikipedia.org/wiki/Mafia_(party_game) Mafia (party game) - Wikipedia which could be  simplified as two players playing against each other (red and black team) with difference that black team knows its composition and red team do not . 
+
+
+It is hard to produce many real world game notations since it is hard to codify those (labor expensive) so I want to start from scratch with self play. 
+
+On training while learning - what are my options? 
+
+On resources I can leverage computation resources if needed 
+
+ChatGPT said:
+Thanks for the detailed explanation. I’ll research how to train transformer-based agents via self-play for a simplified two-player version of the Mafia party game, where the black team has asymmetric information. I’ll explore strategies for training from scratch (due to lack of labeled data), with a focus on training-while-learning (online learning), and consider architectures and methods from modern transformer and ILM research that are suitable for games with imperfect information and strategic reasoning.
+
+I’ll also outline practical implementation options using available computation resources. I’ll let you know once I’ve gathered everything.
+
+Research completed in 8m · 24 sources · 138 searches
+Training Transformer Agents via Self-Play for Simplified Mafia Game
+
+Training a Self-Play Agent for a Two-Player Mafia Game Using Transformers
+Introduction and Problem Setup
+Developing an AI for a two-player Mafia-inspired game poses a complex, partially observable challenge. One player (the "black team") has hidden information (knows identities) while the other (the "red team") does not, making this a classic imperfect-information two-player zero-sum game. The game can be modeled as a deterministic extensive-form game (sequential turns with a game tree), but its complexity and hidden information render traditional search-based solutions (like brute-force or Monte Carlo Tree Search) intractable. Instead, a self-play reinforcement learning approach is desirable, training agents from scratch via repeated games against themselves. Key Challenges:
+Asymmetric information: Each agent has a different knowledge state (one knows the hidden role, the other doesn’t), so the AI must learn beliefs or strategies accounting for uncertainty.
+Long-term planning: The game may involve multiple turns of deceptive or probing actions; an agent must remember and utilize history (conversations, actions) – requiring memory of past moves.
+Sparse reward: Typically win or loss is only determined at game end, making credit assignment difficult. We might need to shape rewards or carefully handle exploration to learn effectively.
+High complexity: Even a simplified Mafia game has a huge strategy space (bluffing, deduction, etc.), requiring powerful function approximators and possibly large-scale training.
+Our Goal: Use transformer-based deep learning architectures combined with modern self-play reinforcement learning (RL) techniques to train an agent without human data. We’ll explore how to structure training (online vs. offline self-play), ensure sufficient exploration, and leverage recent advances from game-playing AI and large language models. We also identify relevant research (from poker AIs to Diplomacy and Stratego agents) and open-source tools that can guide implementation. Below, we break down the approach into several aspects: using transformers for game-state modeling, designing the learning process, drawing lessons from state-of-the-art agents (e.g. OpenAI Five, DeepMind’s Gato, Meta’s Cicero, etc.), and practical implementation details (frameworks, game state encoding, reward design, architecture configuration).
+Applying Transformer Architectures in Self-Play Environments
+Transformers have emerged as powerful sequence models and can be applied to game-playing agents in multiple ways:
+Modeling Game Histories: A transformer can process a sequence of observations and actions, making it well-suited to games where history matters. In an imperfect-information setting, the information state (what an agent knows so far) is essentially the sequence of past interactions. A transformer policy can take the sequence of moves/dialogues as input and attend to important past events when deciding the next action. This provides a form of memory, eliminating the need for an explicit recurrent network. For example, a recent transformer-based Poker AI was able to learn the game of Hanafuda Koi-Koi by encoding each round’s action sequence and game state into a transformer model
+github.com
+. The model’s self-attention allowed it to focus on key cards and events, yielding strong play.
+Large Capacity and Representation Power: Transformers can handle large state-action spaces by encoding them into token embeddings. DeepMind’s AlphaStar (StarCraft II AI) demonstrated this by using a transformer to process the list of game units and features each step
+deepmind.google
+. AlphaStar’s network had a transformer torso that computed relationships between units (similar to a “relational” module) and then fed into an LSTM for sequential decision-making
+deepmind.google
+. The transformer helped handle the complex observation space (hundreds of units) and was cited as aiding long-horizon reasoning
+deepmind.google
+. In our Mafia game, the observation might include various features (roles, prior votes/accusations, etc.) – a transformer could flexibly encode such structured input (even as a set of tokens) and reason about interactions (e.g., who accused whom).
+Memory and Belief Modeling: In partial-information games, an agent benefits from recalling past actions to infer hidden information (for instance, the “red” player must deduce if the opponent is mafia from their behavior). A transformer can serve as a state estimator, implicitly maintaining a belief about the unknowns via its attention over the history. This is analogous to using a recurrent neural network for memory, but with the advantage of direct access to any prior timestep via attention. Notably, the Gated Transformer-XL (GTrXL) architecture introduced modifications (gating and initialization tweaks) to stabilize transformer training in RL settings
+arxiv.org
+. GTrXL was shown to match or exceed LSTM performance on memory-intensive RL tasks while being more stable to train
+arxiv.org
+. This suggests that a well-designed transformer (with gating or normalization adjustments) can serve as the core of an RL agent, maintaining long-term state in a game like Mafia.
+Sequence Prediction Framing: We can even cast the game-playing problem as a sequence modeling task akin to language modeling. This approach was exemplified by DeepMind’s Gato (“A Generalist Agent”), a single transformer model trained on over 600 tasks including video games. Gato serializes game states and actions into a sequence of tokens and trains the transformer to predict the next action given the past
+reddit.com
+. It learned to play Atari games, control robots, and even chat – all with one model
+louisbouchard.ai
+reddit.com
+. In our case, we could represent each turn (observations + action taken) as a token sequence and train a similar sequence model through self-play data. The Decision Transformer paradigm goes further by conditioning on desired outcomes: it treats trajectories as text and generates actions conditioned on a target return, performing offline RL via supervised learning. If we generate a large corpus of self-play games, a transformer could be trained to imitate the best strategies in those sequences, effectively learning the game by prediction. Indeed, researchers recently achieved human-level performance in Competitive Pokémon (a complex turn-based game with hidden information) by training large transformer models on datasets of human games and self-play, without any explicit search
+arxiv.org
+arxiv.org
+. Their transformer policies learned to infer the opponent’s hidden team and adapt strategies on the fly – essentially treating game play as language and using the transformer’s sequential reasoning strength
+arxiv.org
+arxiv.org
+.
+Communication and Bluffing: If your Mafia game involves dialogue or proposals between players, transformers shine even more, as they’re state-of-the-art for language. Meta’s Cicero agent for Diplomacy (a 7-player negotiation game) combined a strategic RL module with a 2.7-billion-parameter transformer language model to negotiate with human-like messages
+lesswrong.com
+lesswrong.com
+. The dialogue model was a fine-tuned Transformer (based on BART/GPT) that generated persuasive communications consistent with the agent’s plan
+lesswrong.com
+lesswrong.com
+. While our two-player Mafia variant might not require free-form language, this illustrates transformers’ ability to handle deception and negotiation. One could constrain communication to a discrete set of actions (e.g., accuse, deny, etc.), and a transformer-based policy can learn when to use each, perhaps by attending to the opponent’s past statements. If in the future you wanted to add natural language bluffing, leveraging an LLM (like GPT-4) fine-tuned for the game could be an option – Cicero’s success shows this is viable at scale
+lesswrong.com
+.
+In summary, transformers provide a unified architecture to handle the varied challenges of this game: they can represent complex states (even as token sequences), maintain memory of past turns, and output context-dependent actions. Importantly, to use transformers effectively in self-play RL, we must ensure stable training (possibly via architectures like GTrXL
+arxiv.org
+ or by pretraining on synthetic data before online RL). We’ll next discuss how to set up the learning process around such a model.
+Structuring the Learning Process: Online vs. Offline Self-Play, Exploration, and Rewards
+Designing the training loop for a self-play agent requires careful attention to stability, exploration, and efficiency. There are two broad approaches we can take (and even combine): an online reinforcement learning paradigm, and an offline learning (self-play data) paradigm.
+Online Self-Play Reinforcement Learning
+In online training, the agent improves by directly playing games against itself (or past versions of itself) and updating its parameters from the game outcomes in an iterative loop. This resembles the process used in AlphaGo Zero and OpenAI Five:
+Initialize a policy (e.g., randomly or with a simple prior).
+Self-play matches: The agent plays both sides (you can use a single neural network that takes an input indicating which role it is playing). Each game produces a trajectory of states, actions, and a final reward (+1 win / -1 loss, for example).
+Experience storage: Collect these trajectories into a buffer. In partial-information games, it’s important to use the agent’s observations (not full state) when training, so the policy learns from what it actually knew at each decision.
+Policy update: Use an RL algorithm to update the network weights from the collected games. Popular choices for two-player games are policy gradient methods (PPO, A2C) or value-based methods (DQN or Q-learning variants). Policy gradients with self-play have been very successful (AlphaGo, AlphaZero, AlphaStar, OpenAI Five all used policy-gradient or actor-critic methods). For example, OpenAI Five used a multi-agent PPO (proximal policy optimization) setup with an LSTM policy to train Dota agents via self-play
+reddit.com
+. They fed thousands of self-play games per iteration into PPO updates. Value-based methods can work too (DeepMind’s earliest poker approach used DQN in self-play), but must handle partial observability (requiring recurrence or memory in Q-networks). One elegant approach was Neural Fictitious Self-Play (NFSP) by Heinrich & Silver, which combined DQN for best-response learning with supervised learning for the average strategy
+medium.com
+ – effectively an actor-critic method where the “critic” is the best response Q-network and the “actor” is an implicitly averaged policy updated via imitation
+medium.com
+.
+Repeat: Use the updated policy to generate new games, and continue training.
+Stability Considerations: In two-player self-play, naive training can lead to oscillations (policy cycling through strategies) or exploitation of transient weaknesses. Techniques to stabilize learning include:
+Self-Play with Historical Policies: It helps to occasionally play against older versions of the agent (or use a pool of past policies). This is analogous to fictitious play in game theory, where you assume opponents use a mixture of their past strategies. DeepMind’s AlphaStar implemented this via a league training system: at intervals, they would freeze agents (“competitors”) and introduce new agents that train to beat combinations of past agents
+deepmind.google
+deepmind.google
+. This maintained a diverse set of opponents and prevented the agent from overfitting to its latest adversary. AlphaStar’s league ensured the agent couldn’t forget how to beat old strategies and had to continually address new strategies emerging
+deepmind.google
+. In our two-player setting, a simpler version could be checkpointing the model every N updates and mixing those into self-play as opponents. OpenAI Five indeed used a form of opponent replay: they would play agents against a distribution of past selves (with some probability of playing against older checkpoints)
+reddit.com
+. This technique was noted as crucial to prevent degenerate cycles.
+Exploration incentives: Ensure the agent doesn’t settle on a suboptimal but self-consistent strategy early. Standard methods include epsilon-greedy exploration for value-based RL (occasionally take random actions) or entropy regularization for policy gradients (encourage the policy to have higher entropy, i.e., avoid overly confident, deterministic choices early in training). OpenAI Five added small randomizations to exploration – e.g., random hero ability usage or slight rule variations – to force the policy to learn robustness
+reddit.com
+. You could similarly randomize some game conditions or add stochasticity (if applicable) to expose the agent to varied situations. Another approach is intrinsic rewards (curiosity), though in a competitive game this is less common. Given enough self-play, the natural competition can drive exploration: if one agent finds a new strategy, the opponent must adapt or lose, creating an automatic curriculum
+deepmind.google
+deepmind.google
+. In practice, however, early training may need help to discover any winning strategy, so explicit exploration noise or schedule (anneal randomness over time) is useful.
+Learning dynamics towards equilibrium: Recent research has looked at adjusting the RL updates themselves to converge to Nash equilibria. DeepMind’s DeepNash (Stratego agent) introduced a technique called Regularized Nash Dynamics (R-NaD) to modify the standard self-play learning rule and avoid constant cycling
+arxiv.org
+. Essentially, it added a regularization to the policy updates to stabilize around Nash equilibrium strategies. DeepNash achieved stable convergence in the extremely large game of Stratego without any search, purely by this modified self-play RL algorithm
+arxiv.org
+. While implementing R-NaD from scratch is non-trivial, the takeaway is that careful tuning of the learning rule (e.g., adding a small policy smoothing term or using restricted KL updates as in PPO) can help the agent not overreact to recent outcomes.
+Reward Handling: In online self-play RL, typically the reward is zero-sum: +1 for a win, -1 for a loss (or 0/1). This sparse reward can make learning slow. Some successful agents introduced reward shaping to guide intermediate behavior:
+OpenAI Five initially gave heroes rewards for objectives like tower kills, gold difference, etc., to help learn basic strategies, though they note the final 1/0 win reward was sufficient for 1v1 and eventually for 5v5 as well
+reddit.com
+. In our Mafia game, we might consider minor rewards for intermediate goals (e.g., if the red player correctly accuses the black player, or if the black player survives X rounds). However, one must be cautious – shaping can bias the strategy if it’s not perfectly aligned with winning. A safe approach is to use the final outcome for training the main agent (as the value network target), but perhaps use reward shaping only as an auxiliary reward that does not directly optimize the policy. For example, you could have a secondary loss that rewards staying alive each round or making “sensible” moves, just to stabilize training, while the primary optimization is still on win/loss.
+Alternatively, use self-play curriculum: Start training on a shorter or easier version of the game (fewer turns, or a simplified rule set) where learning signals are more frequent, then gradually increase the difficulty. This is akin to how one might train on smaller board sizes in Go or fewer pieces in chess and scale up. If your game structure allows a simplified variant (maybe fewer possible moves or a shorter time limit), that could ease initial learning.
+Policy Architecture for Online RL: As discussed, a transformer with memory can be used as the policy network (or policy+value network). To integrate it in RL:
+If using policy gradient (PPO/A2C): The transformer can output a probability distribution over actions (and possibly a value estimate). You’ll compute advantage estimates from game outcomes and backpropagate through the transformer. This has been done in e.g. AlphaStar’s architecture (they had a transformer+LSTM, but one could do purely transformer). Ensure to use recurrent episode resets if your transformer processes the game turn-by-turn (each episode start should reset its memory). Libraries like Stable Baselines3 or Ray RLlib allow custom policy networks – you can implement a transformer policy and plug it into PPO. Note that transformers are heavier than typical MLPs or CNNs; you may need to adjust learning rates or PPO clip parameters to avoid unstable updates. The GTrXL paper demonstrated that gating residuals in the transformer helped RL stability
+arxiv.org
+ – you might consider using or at least initializing your transformer in a gated/normalized way (or use their open-sourced GTrXL implementation
+opendilab.github.io
+).
+If using Q-learning (DQN/NFSP): You’d use the transformer to output Q-values for actions given a sequence of observations. DQN requires a fixed-length input, so you might limit the history length or use positional embeddings up to a max length (e.g., last 20 moves). NFSP offers a nice approach: you maintain two networks – one (policy network) tries to imitate the mixture of past policies (trained via supervised learning on experience replay of its own actions), and another (Q-network) is trained off-policy to predict Q-values (best responses)
+medium.com
+. During play, the agent sometimes follows the policy network (average strategy) and sometimes does a best-response (guided by the Q network) to generate learning data. This approach proved convergent in certain poker games
+medium.com
+. Implementing NFSP is more complex (requires two replay buffers and careful hyperparameters), but there are open-source examples (e.g., OpenSpiel has an NFSP implementation for poker
+openspiel.readthedocs.io
+). NFSP could be an interesting choice if you aim for an approximate Nash equilibrium strategy in the end, as it explicitly learns an equilibrium by balancing exploitation and exploration.
+Offline Self-Play (Data-Driven) Training
+In offline training, one would generate a large dataset of self-play games (trajectories) and then train the model on that data via supervised or offline-RL techniques. This can complement online training or bootstrap it:
+Behavior Cloning / Supervised Learning: You could start by coding some basic AI or heuristic for both roles (even if suboptimal) to generate initial games. Or begin with the self-play of a partially trained model. Then treat the problem as predicting the next action given the current history (and perhaps the final winner as extra context). By training the transformer on these sequences (minimizing cross-entropy loss to predict the actual next moves taken in the games), the model will learn the structure of the game and some rudimentary strategy. This is exactly how AlphaStar began: they trained on human replays to reach a baseline policy before self-play RL fine-tuning
+deepmind.google
+. In our case, we lack human data, but even self-play of a simple scripted policy can serve as “replay” data to kick-start learning (ensuring the transformer doesn’t start totally from scratch). The model will learn, for example, the turn-taking structure, valid moves, etc., from this phase.
+Offline Reinforcement Learning: Given a fixed dataset of games labeled with outcomes, one can use offline RL algorithms or reward-weighted regression to improve the policy. For example, the Decision Transformer approach mentioned earlier could be applied: label each trajectory with the game result (return) and train the model to generate actions that achieve that return
+arxiv.org
+arxiv.org
+. One can also do simpler outcome-conditioned behavioral cloning – e.g., train the model to predict moves, but weight trajectories where the agent eventually won more heavily (this is essentially policy gradient in disguise, or importance sampling by outcome).
+Iterative Improvement (Expert Iteration): A powerful training loop can alternate between self-play data generation and offline training. For instance, DeepMind’s AlphaZero famously did: for each iteration, use the current policy network to play many games (with some MCTS to improve move quality in their case), then train a new network on the self-play data (states labeled with the winner or with the MCTS-enhanced policy)
+arxiv.org
+. In imperfect info games, we can’t directly do MCTS without beliefs, but we can still use the idea of expert iteration: use the current model (or a mix of current and older models for diversity) to play out a large batch of games. Then retrain the model on this accumulated dataset, possibly using a knowledge distillation or cross-entropy loss to predict the actions that led to wins. Each cycle, the policy improves. This is similar to how ReBeL was structured: ReBeL would generate self-play data, but also solve small subgames via search to provide targets for the network, then update the network and repeat
+arxiv.org
+. Without doing full search, we can still treat the latest self-play outcomes as ground truth.
+Scaling with Compute: Offline training can take advantage of large compute by batching and parallelism. You can generate millions of games using a distributed setup (since you mentioned significant compute available). These can be on-the-fly (a large number of parallel self-play environments generating transitions, similar to how IMPALA or other distributed RL architectures work). Or generate and save them to disk incrementally. One approach: use a distributed rollout framework – e.g., Ray RLlib’s Self-Play API allows multiple workers to simulate games between the current policy and variants. OpenAI Five’s training effectively ran 180 years of games per day through parallelization
+reddit.com
+. While you likely won’t reach that scale, even a modest cluster can simulate thousands of games, providing a rich dataset for the transformer to learn from. Keep in mind, however, that if you train purely offline on an static dataset, you need to mitigate distribution mismatch – i.e. the model might start suggesting actions not in the dataset. Iteratively updating the dataset (or using an off-policy RL algorithm with importance corrections) can handle this.
+Example – Offline RL success: The Competitive Pokémon AI project (2023) is a great example of mixing offline and online self-play. The researchers collected real human match data (years of logs) and trained a transformer offline, then fine-tuned on self-play data generated by the model to surpass human performance
+arxiv.org
+arxiv.org
+. They found that purely learning from static human data plateaued, but adding self-play helped explore strategies humans hadn’t tried and improved the agent to top-tier ranking
+arxiv.org
+. This suggests that a combination of learning from existing games (even if self-generated) and self-play fine-tuning yields the best results.
+In practice, you might use online RL as the core, but periodically snapshot the policy and do a large offline “retraining” on collected games to smooth out the policy (a form of experience replay on a big scale). This hybrid can stabilize training because the supervised-like phase consolidates what was learned.
+Managing Exploration and Balance
+Exploration in self-play has a unique flavor: the agent is exploring the strategy space of the game. Some additional tips:
+Policy Randomization for Bluffing: In a game of deception, a deterministic policy is easily exploited. You’ll want the final agent to randomize strategies (mixed strategy equilibrium). Adding an entropy bonus in the loss (as is common in PPO) encourages the policy to keep a healthy distribution over actions. You can anneal this bonus lower over time, but not to zero – a small entropy regularizer ensures it doesn’t converge to a single pure strategy when the game theoretically demands mixing.
+Symmetric Self-Play vs. Distinct Roles: Because the two roles (mafia vs. citizen) have different information, one question is whether to train one neural network for both roles or separate networks. Using a single network with a role indicator (a binary feature for mafia or not) is feasible and often desirable – it forces a unified value function that, in principle, should represent the zero-sum game’s value for any state from either perspective. AlphaZero, for instance, uses one network to play both white and black by flipping the perspective. In imperfect-info games, it’s common to use one policy that just takes different observations per player (e.g., in poker self-play, the same network that takes as input “my cards + public cards” can control either player, since each sees their own cards). We can similarly feed the agent a special token/flag indicating its role and perhaps a representation of its private information (for mafia, the identity knowledge). The network will learn to condition behavior on that. This has the advantage that learning from one side’s perspective can inform the other to some extent via shared parameters. However, if the strategies are extremely different, separate networks could be trained and pitted against each other. That approach is more like GAN training and could be unstable (one network might get ahead of the other). The common practice in two-player zero-sum is a single policy network – we will follow that, with role as part of the input.
+Equilibrium Verification: As training progresses, periodically evaluate the agent against some fixed strategies or past versions to ensure it’s improving. You can maintain an Elo rating for the agent by having it play a quick round-robin against older checkpoints or known heuristics. This can detect cycles (if a new model starts losing to an old one, something’s off) and help choose the best policy. The final goal is a Nash equilibrium strategy (unexploitable). Reaching exact Nash is hard, but techniques like self-play + regret minimization (as in ReBeL) are designed for that
+arxiv.org
+. ReBeL’s idea was to use search to compute a local equilibrium at each state during play, guided by a learned value network, thus always playing near-Nash policies
+arxiv.org
+. For our purposes, a well-trained self-play RL agent often approximates a Nash (AlphaZero converged to very strong strategies in Go/chess), but one must be mindful of hidden information – the agent might develop “strategies” that work against itself but not robustly. If possible, challenge the final agent with some different opponent (maybe a rule-based liar or a completely random player) to see if it can exploit them. A solid agent should beat a random player easily and not be tricked by simple bluffs.
+Summary of Learning Process
+To summarize this section with concrete guidance:
+Start simple: perhaps implement a quick rule-based mafia and citizen to play a few games, and train the transformer policy via supervised learning on this to initialize.
+Online self-play with PPO (for example): Use the transformer (with recurrent memory or with full sequence input each turn) as the policy network, and run many games in parallel. Use a relatively high entropy coefficient initially to encourage varied play. Every training iteration, have the PPO optimizer improve the network using the self-play results.
+Integrate experience replay: Maintain a buffer of past games (especially if using off-policy methods or NFSP). This prevents forgetting older strategies. Even in PPO, you can mix in old trajectories occasionally or at least ensure each policy update sees a diverse batch of states (not all from the very latest policy).
+Periodic offline refresh: Every so often (say every K updates), you can take the cumulative batch of games and do a full pass optimization (like a supervised distillation of the improved policy, or just let PPO epoch a bit more). This is optional but can improve stability.
+Monitoring: Track the win-rates of the policy against fixed benchmarks over time. For example, a random policy or one that always accuses might serve as a baseline – your learned agent should achieve >50% win against such baselines as it improves.
+Compute scaling: Leverage your significant compute by scaling out self-play game generation. Using a framework like Ray or Distributed PyTorch, you can run hundreds of game simulations concurrently to feed the learner. This was key in OpenAI Five’s success – they processed about 2 million game frames per second with thousands of CPU cores and many GPUs
+cdn.openai.com
+. You likely don’t need that extreme scale, but more games will lead to faster learning of rare situations (e.g., corner-case bluff scenarios).
+Next, we’ll look at recent work and algorithms that are especially relevant, to ground these ideas in proven techniques and identify libraries and frameworks.
+Inspiration from Recent Game-Playing AIs and Frameworks
+Modern AI research offers several paradigms and systems we can draw from for our Mafia game agent. Here we highlight key examples and what they contribute:
+AlphaZero and Monte Carlo Tree Search Alternatives
+AlphaZero (2017) proved that self-play with deep neural networks and MCTS can master perfect-information games (Go, Chess, Shogi) from scratch. It iteratively updated a ResNet policy-value network by playing against itself with MCTS-guided moves, and training on the outcomes
+arxiv.org
+. While our game has hidden info (making standard MCTS unsuitable), the general principle of self-play with function approximation comes from AlphaZero. If our game had a way to simulate “belief states” or sample hidden info, one could imagine an AlphaZero-like search. However, since that’s complex, we instead lean on model-free RL like OpenAI Five did. One lesson from AlphaZero: it relied purely on final rewards (win/lose) without shaping and still succeeded, suggesting that if we have enough compute and a strong policy model, the sparse reward alone can drive learning. We should be cautious but optimistic about using the binary win/loss reward as the objective, possibly combined with baseline subtraction or value function to stabilize learning.
+MuZero (2019) extended AlphaZero by learning a model of the game dynamics (so it could handle environments without known rules). Again, MuZero was demonstrated on perfect-information domains. For hidden info, similar approaches venture into belief modeling. If in the future one wanted to incorporate a search component, research like ReBel (below) or techniques from partially observable MCTS (POMCP) might be relevant. However, given the complexity, our plan is to not do explicit search during play, but rely on the learned policy’s intuition.
+OpenAI Five (Dota 2) – Massive-Scale Self-Play RL
+OpenAI Five is a hallmark example of scaling self-play RL to a very complex, partially observable game (5v5 MOBA). Key takeaways:
+They used a simplified game state and a single unified LSTM network for each hero, trained with Proximal Policy Optimization (PPO). The architecture had about 84 million parameters with an LSTM core for memory (since Dota has fog-of-war, similar to hidden info)
+reddit.com
+. This is analogous to what we propose: a transformer (with possibly similar parameter count) can replace the LSTM to handle memory in our turn-based game.
+OpenAI Five’s training was extremely scaled: 128k CPU cores and 256 GPUs running 24/7, generating ~30,000 game years of self-play over ~10 real-time months
+reddit.com
+. They note the method itself was relatively simple (“no search, no intrinsic curiosity, no hierarchy” – just flat RL with lots of data)
+reddit.com
+. This suggests that with enough experience, self-play can solve very hard games even without fancy tricks. Of course, we likely cannot match that scale, so efficiency is important (hence the interest in offline reuse of data and strong architectures).
+They applied some reward shaping early on (to encourage cooperation among the 5 heroes, etc.) but found that even a sparse win/loss reward could eventually train a winning agent
+reddit.com
+. So, shaping is mostly to speed things up.
+They used domain randomization and constraints: e.g., initially limited the hero pool, fixed some game aspects, and slowly expanded to full game complexity. Similarly, we might simplify the Mafia game initially (maybe limit the length of game or restrict some action types) and then open it up as the agent improves.
+One interesting detail: they employed “historical self-play”, keeping a pool of older agents to play against, which we discussed. They also saved checkpoints and did internal tournaments to select the best model. We can emulate a mini-version of this by saving models every N iterations and occasionally sampling one as the opponent (ensuring the learning agent occasionally faces a slightly weaker or differently biased strategy, which forces it to generalize).
+For implementation, OpenAI did this with custom infrastructure, but frameworks like PettingZoo (for multi-agent environments) and RLlib can orchestrate multi-agent training. In RLlib, you can define policies for each agent and use self-play evaluation in training (there’s a “SelfPlay” utility that pits the latest policy against past ones). This might reduce the manual work of managing opponent pools.
+In short: OpenAI Five demonstrates feasibility: a sufficiently powerful RL algorithm (PPO/LSTM) can handle partial observability and multi-agent competition if given enough data and minor reward tuning. For us, using PPO with a transformer should be a solid starting point, with the understanding that more compute can often compensate for simpler algorithms.
+DeepMind’s AlphaStar (StarCraft II) – League Training and Transformers
+AlphaStar (2019) mastered StarCraft II, another complex imperfect-information game, and it introduced a robust training scheme:
+League Training: As mentioned, they didn’t train a single agent in isolation; they maintained a league of agents with different objectives (some were optimized to beat the main agent, some to exploit certain strategies, etc.)
+deepmind.google
+deepmind.google
+. This was a response to the rock-paper-scissors nature of strategies – it ensured coverage of the strategy space. While our two-player game is simpler, a mini league approach could be: train one main agent, and occasionally freeze it as “agent A”. Then train a new agent “B” from that checkpoint with slight variations (maybe a different exploration parameter) focusing on beating “A”. Alternate or mix their self-play. This is a heavy approach for a small project, but keep it in mind if you see your agent oscillating between strategies (e.g., if it overfits to one pattern).
+Neural Architecture: AlphaStar’s network was a mix of a transformer and LSTM, as noted. It used pointer networks to select units and targets, which is not directly relevant for our discrete game, but the concept of using attention to handle variable entities is relevant. For Mafia, the “entities” could be players or pieces of evidence – e.g., you can have an embedding for each player and use self-attention to decide who to accuse. This is speculative but shows how flexible transformers can be with input design (embedding each relevant piece of info as a token).
+Human data initialization: They used supervised learning on human games to bootstrap
+deepmind.google
+ – a reminder that if we can simulate or script some reasonable behaviors, giving the model a head-start via imitation can save a lot of training time.
+Open-Source: DeepMind hasn’t open-sourced AlphaStar code, but they did release PySC2 (an environment API) and published many details. For turn-based games, OpenSpiel (by DeepMind) is more relevant. OpenSpiel is an open library specifically for research on games – it includes many algorithms (like CFR, NFSP, policy gradient) and supports imperfect info games like poker, but also simpler turn games
+venturebeat.com
+venturebeat.com
+. It’s written in C++ with a Python API. If your Mafia game can be expressed in OpenSpiel (as an extensive-form game), you could directly leverage their NFSP implementation or evaluate exploitability. OpenSpiel supports turn-based games with information states and has analysis tools for learning dynamics
+venturebeat.com
+venturebeat.com
+. This might be overkill to integrate, but worth knowing. At minimum, one can borrow ideas from its implementations (the code is on GitHub and fairly well-documented).
+Imperfect-Information Game Solvers: Poker AIs (Libratus, ReBeL) and Beyond
+Poker has been a testbed for AI in hidden-information settings:
+Libratus (CMU, 2017) and DeepStack (Alberta, 2017) were the first to beat top humans in heads-up poker. They used game-theoretic search with abstraction, rather than self-play RL – Libratus computed strategies via solving smaller subgames during play (no learning), and DeepStack learned a neural value function to guide a search in “belief space”. These were very domain-specific solutions.
+ReBeL (Facebook, 2020) is more general and relevant to us
+arxiv.org
+. ReBeL (Recursive Belief-based Learning) combined self-play reinforcement learning with a search at inference time over belief states. It maintains a neural belief state value function, which given an information set (e.g., what cards you see and the betting history) outputs values for possible world states. During play, ReBeL would sample possible hidden information consistent with what’s known, and effectively run a mini game tree search (a depth-limited counterfactual regret minimization) using its value network to evaluate leaves
+arxiv.org
+. After each game, it trained the network on the self-play data to improve the value estimates. Over time this converges to a Nash equilibrium in two-player zero-sum games (ReBeL is provably convergent and achieved superhuman performance in Texas Hold’em)
+arxiv.org
+arxiv.org
+. While ReBeL is quite advanced, the concept of explicit belief modeling might inspire us: if our Mafia game can enumerate the possible hidden states (who is mafia or not – here it’s trivial: either Player A or Player B is mafia), one could incorporate that knowledge. In this simple game, the “belief” the red player has is just a probability that the opponent is mafia (initially 50/50, then updated through actions). A transformer could be trained to approximate belief update implicitly, but we might also manually input features like “credibility score” or count of suspicious actions to help it. If we wanted to emulate ReBeL on a small scale, we could generate fictitious self-play where the red agent randomizes who it believes the mafia is and see if strategies emerge. However, given the binary nature of the role, we might not need heavy belief search – RL can learn to act optimally by trial and error (especially since each game the role is randomly assigned, so across games the agent experiences both being mafia and being citizen).
+DeepNash (DeepMind, 2022), as discussed, mastered Stratego with a model-free approach
+arxiv.org
+. Notably, Stratego’s state space (~10^535) dwarfs even Go, and it has many pieces and long games
+arxiv.org
+. DeepNash’s success without search hinged on that R-NaD algorithm to reach equilibrium
+arxiv.org
+. It essentially shows you can directly learn a Nash equilibrium via self-play RL if you control the learning dynamics properly. The algorithm details are complex (involving regularizing towards uniform policy to avoid overfitting to the opponent’s current policy). If our training faces cyclic behavior, looking into simplified versions of regret minimization or adding a small uniform mix into the policy might help (e.g., always have a tiny probability to do a random move – which ensures strategies can’t exploit deterministic behavior). This is akin to adding an entropy floor.
+Neural Fictitious Self-Play (NFSP, 2016), an earlier DeepMind work, we already touched on: it’s simpler than ReBeL and might be directly implementable
+medium.com
+. NFSP has two networks: a best response (Q-learning) network and an average strategy (policy) network. It plays by sampling a policy that is a mixture of its average strategy and a small probability of best-response exploitation. Training wise, the Q-network learns via RL (DQN updates from self-play games), and the policy network periodically gets supervised training on the actual actions taken by the agent (which tend towards the best response over time)
+medium.com
+. This way, the policy network approximates the converged equilibrium strategy, while the Q-network ensures the agent can still exploit if the opponent strays. The open-source implementation by Eric Steinberger and the version in OpenSpiel could serve as references if you choose this path. NFSP was shown to converge in simple poker and other games, so it’s a candidate for a principled training approach in our game too. It is more complicated to implement than straight PPO though.
+Transformers in Other Imperfect-Info Games
+It’s worth noting a few more niche but relevant projects:
+Transformers for Card/Board Games: Beyond Koi-Koi Hanafuda
+github.com
+, there’s research like “Tjong: A Transformer-based Mahjong AI” which used a hierarchical policy (separate decisions for discard, meld, etc.) all implemented with transformers. Mahjong is four-player and partially observable (unknown tiles), yet Tjong achieved high performance with self-attention capturing tile relationships and game context. The authors reported accuracies ~95% on some decision tasks and strong gameplay, validating that transformers can excel in stochastic, hidden info games by effectively modeling state context and long-term consequences (since Mahjong, like Mafia, has a mix of strategy and chance).
+Diplomacy (Meta Cicero): We mentioned Cicero’s language component, but its strategic model for moves also learned under partial information (players’ true intentions are hidden). Cicero’s strategic module was trained via self-play RL on the no-press Diplomacy (no negotiation) game, optimized to maximize win rate while also imitating human-like play to remain cooperative
+lesswrong.com
+lesswrong.com
+. They specifically balanced two objectives: being effective and being human-friendly, because in Diplomacy appearing human was part of the challenge. In your case we can ignore that second objective, but it’s a reminder that sometimes a bit of imitation or regularization can help the agent not pursue bizarre strategies (especially if your game will eventually play with humans). If, for example, the black agent found a strategy that technically wins but by nonsensical moves that no human would do, and if that’s undesirable, you could add a small imitation loss towards “natural” behavior (assuming we define that somehow). Otherwise, pure win-maximization is fine.
+Large-Scale Language Models (LLMs) for deduction: There have been experiments using GPT-4 or similar models to play social deduction games via prompting. For instance, a recent arXiv study had LLM-based agents play a multi-player Mafia by exchanging messages (using prompts to represent the game state)
+arxiv.org
+. Results are not yet superhuman, but LLMs showed some ability to reason about deception. This is more relevant if you wanted a language-based approach (e.g., use ChatGPT to propose moves). Given you want to train from scratch, this might be out of scope, but it’s an avenue: one could fine-tune an LLM on transcripts of Mafia games to get a language-based policy. However, collecting such data and fine-tuning a model that large is a huge project on its own.
+Libraries, Frameworks, and Tools
+To implement all this practically, here are some concrete resources:
+PettingZoo (Python library): A Gym-like API for multi-agent environments. It has support for turn-based and simultaneous games. You can define your Mafia game as a PettingZoo environment (with .step returning observations for the next player, etc.). PettingZoo makes it easy to plug into stable RL libraries.
+Ray RLlib: A robust library that supports multi-agent training. You can specify policies for each role and use RLlib’s self-play and policy checkpointing features. For example, you can have a single shared policy and let RLlib handle self-play by making both agents use it. RLlib can also do things like policy freezing (you can have a “main” learning policy and a “static” opponent policy that updates occasionally to simulate playing against old versions). RLlib’s documentation has examples of self-play (e.g., training PPO on two-player games where the opponent is a past version).
+OpenSpiel: If you prefer a research-oriented approach, OpenSpiel (by DeepMind) contains many algorithms (including NFSP, CFR, etc.) as well as a variety of games. You would have to implement the Mafia game in OpenSpiel’s game format (defining the game states, legal actions, etc.). Once done, you can try their NFSP implementation almost out-of-the-box
+openspiel.readthedocs.io
+. OpenSpiel is great for verifying algorithms or experimenting with different ones. It also has evaluation metrics like exploitability which could tell you how far from Nash equilibrium your policy is (though computing that in large games is hard).
+Horizon (Facebook): An older RL platform from Facebook (now Meta) focused on applied RL. It’s less about games and more about real-world recsys etc., so probably not as relevant as RLlib or Stable Baselines for our use case.
+Stable Baselines3: Good for single-agent RL – to use it for self-play, you can either (a) train one policy and manually have it self-play (outside the library loop), or (b) use two policies and alternate training. SB3 doesn’t natively handle self-play but is simple to extend. For a quick prototype, you could hack something: e.g., simulate a game with your current model playing both sides, collect transitions, then treat it as a single-agent RL where the observation includes the role (so it thinks of it as one Markov decision process from a god’s view, but since the policy is symmetric with role input, it effectively is doing self-play).
+Trajectory Visualization and Debugging: Because strategy learning can be opaque, it helps to record game logs. You might want to implement a way to replay games and see what decisions the AI made, perhaps with its predicted probabilities. This is invaluable for debugging whether the agent is learning sensible behavior or stuck in nonsense. If using a transformer, you can also inspect the attention weights for interpretability (the Koi-Koi project even provided an attention visualization tool
+github.com
+). Seeing what tokens (e.g. which past moves) the model attends to when making a decision could give insight – e.g., does the citizen agent attend strongly to a specific suspicious move by the opponent? That can validate that it’s deducing correctly.
+Existing Code Repositories:
+The KoiKoi-AI GitHub
+github.com
+ is an example of a transformer applied to a game. It uses PyTorch and might contain useful patterns (like how they encode game state as input tokens, how they integrate the model with a DQN or policy gradient).
+Facebook’s ReBeL code is on GitHub (facebookresearch/rebel)
+proceedings.neurips.cc
+. It’s archived read-only but still accessible. It likely includes code for Liar’s Dice (which was one of their test games). Studying that could show how they implement self-play loops with search.
+Eric Steinberger’s NFSP (EricSteinberger/Neural-Fictitious-Self-Play on GitHub) is a clean implementation for Leduc poker. It’s in Python and TensorFlow, illustrating the training loop with two networks. Adapting that to Mafia would involve redefining the game environment and actions, but the algorithm part can be similar.
+If you want to incorporate language or complex observations, HuggingFace’s Transformers library can load models like GPT-2 which you could fine-tune for dialogue. But since we aim for from-scratch, a custom small transformer via PyTorch or TensorFlow is more straightforward.
+Hardware: Since you have significant compute, consider using GPU acceleration for the model training and possibly simulators. If games are fast to simulate (pure logic), CPUs can handle many in parallel. But the neural net inference/training will benefit from GPU. You may end up in a situation where environment simulation is not the bottleneck (like in Go or chess, simulation is cheap; but in physics games it is). For a Mafia logic game, simulation is very cheap, so the bottleneck is likely neural network forward/backward. Thus, maximize GPU usage by running large batch sizes. For instance, you can gather, say, 1024 game steps from CPU workers, then send them as one batch to the GPU for a policy update. This amortizes the overhead. Frameworks like RLlib handle a lot of this automatically (with off-policy algorithms or with batch batching in PPO).
+Game State Representation and Architecture Configuration
+Finally, we should detail how to represent the game to the model, define the outputs, and set hyperparameters for the transformer and learning algorithm:
+State Representation:
+Designing the input to the neural network is critical. We have a turn-based 2-player game with hidden roles. Potential components of the state:
+Role indicator: A binary feature for “am I mafia (black) or not (red)”. This can be as simple as 1 for mafia, 0 for citizen. This informs the policy which side of the information asymmetry it is on.
+Known facts: Anything the player knows about the game status. If the game goes through phases (day/night cycles, votes, etc.), include the phase. If any events have occurred (e.g., the citizen might have attempted a guess, or the mafia might have made a move), include those. Essentially, all public information should be part of both players’ observation.
+Action history: Possibly the entire sequence of actions taken so far in the game (especially if the strategy depends on the order of moves or specific content of accusations). We can encode actions in a learnable embedding space. For example, if actions include “accuse opponent”, “stay silent”, “reveal clue” etc., assign each a token embedding. Then the sequence of past actions is a sequence of tokens. The transformer can ingest this sequence (along with perhaps positional encodings or time-step embeddings). For a fixed-size input, one might limit to the last N actions, but it’s often better to allow arbitrary length (transformer can handle quite long sequences, up to hundreds of tokens, if needed).
+Belief features (optional): We could explicitly provide some engineered features like “probability opponent is mafia” for the red player (which initially is 0.5 and might change if certain actions occur). However, if we trust the model, it might learn to approximate this internally. Still, sometimes a bit of domain knowledge can speed up learning. For instance, if there’s an obvious logical deduction (e.g., if mafia does X, then likely Y), the model could learn it from data, or you could just encode that logic in a feature. This depends on how formal and deduction-heavy the game is. In social deduction, a lot is fuzzy, so learning might be fine.
+Masking unavailable actions: At any state, not all moves are legal (or meaningful). We should mask out illegal actions in the policy output. For instance, if the citizen has only one chance to accuse, once they’ve accused, that action shouldn’t be available again. The output of the network could be a fixed set of action logits, and we apply a mask (setting logits of illegal moves to -inf before softmax). Frameworks like stable-baselines allow a mask in custom policy or you handle it manually in environment logic (if an illegal move is selected, you can either prevent it by adjusting probabilities or simply have the environment ignore it and ask for another – the former is cleaner).
+Deterministic vs. stochastic environment: If there is any randomness (like coin flips or draws), that should also be included in the observation for the player who observes it. If not, then the environment is fully determined by the actions of players (which seems to be the case from description).
+We can combine these pieces into a token sequence or a structured vector:
+Token sequence approach: Construct something like: [ RoleToken, PhaseToken, (Action1, Action2, ..., Action_t) ] as a sequence and feed to a transformer decoder. RoleToken could be a special embedding representing “Mafia” vs “Citizen”. Phase could be another token (like “Night” or “Day” phase). Each action is a token embedding possibly augmented with who performed it. You might need to encode the actor of each action – e.g., “Player1: Accuse” vs “Player2: Accuse” could be different tokens or you provide a separate token for actor. A neat way: use pairs of tokens per turn: [ActionTaken, ActorID]. Or use positional encoding such that odd positions imply it’s the opponent’s action, even positions your actions (if turn-taking is strict alternate).
+Feature vector approach: You can also craft a vector: e.g., one-hot encodings for phase, last move, etc., and feed that to an MLP or a transformer encoder that expects a fixed set of input features (some works create one “token” per feature type). Given the flexibility and our interest in transformers, the sequence approach is appealing.
+Example: Suppose actions are numbered and roles are binary. For turn $t$, if it’s player 1’s turn and they accuse player 2, we could append token [Accuse_P2]. Then for turn $t+1$, player 2 (the opponent) responds, maybe by denying, append [Deny]. The transformer will see sequence [Role=Mafia, Accuse, Deny, ...] if it’s mafia’s perspective (or [Role=Citizen, Accuse, Deny, ...] for the citizen’s perspective) and decide what to do next. Over many games, it will learn patterns like “if I am mafia and I was accused, a strong response is to do X” or “if I am citizen and I accused and got a weird denial, maybe that indicates something”. One must ensure the sequence encoding is unambiguous and order-preserving (transformers have positional encoding to maintain order context). This will allow the model to discern, for example, who did what and when.
+Action Space:
+Define a discrete set of actions for each phase/role. It might include:
+For the mafia: possible actions like “kill (if allowed)”, “claim innocence”, “do nothing”, etc.
+For the citizen: “accuse”, “investigate” (if there’s an investigation mechanic), or perhaps if they have abilities.
+Given it’s a simplified 2-player version, likely the main action is accuse or guess mafia. Maybe the structure is like a one-shot accusation? If the citizen guesses right they win, if wrong maybe mafia wins, or there might be multiple rounds of back-and-forth deception.
+Make sure all these actions are enumerated, and any conditional ones (like if an accusation has been made, maybe the next action is resolution). If the game has phases (night/day), you might treat each phase as separate in the code (with its own action set). PettingZoo can handle that by including the phase in observation and expecting the agent to choose a “No-Op” if no meaningful action in some phase. Output of the model: The transformer can output either:
+A categorical distribution over all possible moves. This is typical for discrete action spaces. If using a policy gradient, you sample from this distribution to pick an action during self-play (to keep exploration).
+In case of multiple action types (e.g., first decide whether to accuse, then whom to accuse), you might need a two-head output or sequential decision. But in a 2-player game, “whom” is obvious (the only opponent). In bigger social games, one might have multi-discrete actions (like choose target and choose content). For now, probably a single discrete action is enough each turn.
+Transformer Architecture:
+Size: You likely do not need a gigantic model given the state space of a 2-player game is not as vast as, say, language modeling. A transformer with a few layers (e.g., 4–8 layers) and a moderate embedding size (128–512) could suffice. Keep in mind transformers scale quadratically with sequence length per layer, but our sequences (game histories) are probably at most on the order of tens of turns. That’s trivial for modern transformers. So sequence length isn’t an issue; you can afford even 100 tokens with ease.
+Parameters: If you set embedding dim = 256, and 4 layers, with 4 heads each, that’s on the order of a few million parameters – easily trainable. If you have more compute, you can go larger (the Pokemon paper used transformers up to hundreds of millions of parameters because they had a huge dataset of human games
+arxiv.org
+).
+Memory: If using the transformer as an autoregressive model at inference, you could feed the past sequence and generate the next action token. However, in an RL loop, it might be simpler to use it as an encoder at each decision point (concatenate past actions and feed through transformer to get a context embedding, then a head for policy). This means reprocessing the history from scratch each time. That’s okay if sequence is short; if performance becomes an issue, one can cache the transformer’s key/value and append as in language model decoding. But given turn-based pace, a full forward pass per turn is fine.
+Value function: In actor-critic algorithms, we need a value estimate (expected win probability from current state). You can implement this by having a value head on the transformer’s final state (maybe use a special [CLS] token concept to summarize, or pool over the sequence) to output a scalar. Alternatively, maintain a separate network for value. AlphaStar had a “centralized value baseline” because of multi-agent, but in two-player zero-sum you can often just use the same network for value and policy (sharing all layers up to some point). This is convenient: the loss will be a combo of policy loss and value loss.
+Regularization: Transformers can overfit if the dataset is small. In RL, the data is on-policy and ever-changing, so overfitting to transient patterns is possible. Techniques: dropout in the transformer layers, entropy regularization (which we already have in policy loss), and maybe layer normalization to stabilize. Monitor if the policy’s entropy collapses too fast (a sign it’s converging to a deterministic strategy prematurely).
+Gating for RL: As mentioned, consider using the GTrXL style if available – this inserts LSTM-like gates into each transformer block to help with non-stationary targets
+arxiv.org
+. If implementing from scratch, you could mimic that or simply ensure to use smaller learning rates and maybe gradient clipping to avoid the issues GTrXL solved. The original transformer wasn’t designed for non-stationary online learning, but many have done it successfully (AlphaStar’s “transformer torso + LSTM” combination was one pragmatic way – they relied on LSTM for sequential stability, using the transformer only for spatial reasoning each frame).
+Multi-Head Attention Interpretation: Each head might attend to different parts of the game history – e.g., one head could focus on recent moves, another on initial claims. You might not need to configure this intentionally; just be aware that if training is successful, the model will learn to use attention meaningfully. You could visualize it later to confirm.
+Hyperparameters:
+Learning Rate: RL can be sensitive; start with a smaller LR than you would in supervised learning for a model of this size. PPO often uses ~2.5e-4 for large networks. For a transformer, perhaps 1e-4 or 5e-5 might be a safe starting point, with linear decay.
+Batch Size / Trajectory length: PPO uses a batch of many timesteps. You might gather, say, 1024 time steps (across many games) per update. Ensure the batch contains a mix of both roles and different game stages (which naturally happens if you sample experiences randomly or run many games). If using recurrent mode (where the transformer maintains hidden state across time, analogous to an RNN), you have to truncate or reset at episode end. If you treat the whole history as input each time, you can just feed full episodes.
+PPO Epochs and Clip: With a complex policy like a transformer, you might do fewer epoch updates per batch (to reduce chance of overfitting the batch or breaking the policy with large updates). E.g., 3–5 PPO epochs per batch, and a conservative clip range (0.1 or 0.2). Also use advantage normalization.
+Entropy Coefficient: Start maybe at 0.01 (ensuring plenty of randomness) and decay it slowly as training progresses and you are confident the agent is exploring enough.
+Discount Factor (gamma): If the game is episodic and you only get reward at end, gamma close to 1 is needed (e.g., 0.99 or 0.995) so that the sparse reward propagates back. If the game lengths are moderate (~10-20 turns), 0.99 is fine.
+Reward normalization: Sometimes helpful to normalize returns (mean 0, std 1) for advantage calculation if rewards are sparse 0/1. But since ours are strictly -1/1 at end, the scale is fixed. Still, advantage normalization (subtract mean, divide std of batch advantages) as PPO often does, will help.
+Curriculum: Consider whether to gradually introduce complexity. If the game has multiple phases or optional actions, maybe start with a version of the game that is simpler. For example, you could train initially where the citizen must accuse by turn 3, forcing quick games, then later remove that limit so the strategy can include delay and misdirection. The agent thus first learns how to accuse effectively in a short horizon, then learns how to use longer horizons to bluff or stall. This kind of curriculum can expedite learning.
+Example of Training Setup:
+Use Ray Tune (if using RLlib) to manage experiments, as it can handle distributed training and hyperparameter tuning.
+If coding manually in PyTorch: use multiple processes (via Python multiprocessing or libraries like SampleFactory or SEED RL implementations) to gather data. One process could act as parameter server (or just broadcast weights periodically) and others simulate games. This is non-trivial but many open implementations exist for IMPALA or Ape-X style distributed rollout. Since we have turn-based synchronous interaction, even a simpler approach: have N environments in threads, each step all N envs and do a mini-batch update, etc.
+Keep logs of win rates (since zero-sum, you can record average reward which should approach >0.5 win probability for both roles if agent is symmetric, or track separately win% as mafia vs win% as citizen – at equilibrium these should be around 50% each if both players optimal, but during training they may oscillate).
+Concluding Guidance and Next Steps
+Bringing it all together, here’s a step-by-step plan to implement and experiment:
+Define the Game Mechanism: Program the simplified Mafia game environment. Clearly specify the sequence of turns and what actions each player can take at each turn. Include random assignment of roles at game start. Ensure the environment can emit observations that contain all needed info for each player (with the opponent’s private info hidden).
+State & Action Encoding: Decide on the observation encoding (likely a sequence of tokens or a feature vector as discussed). Implement a function to convert the game state history into this encoding for the neural network. Set up the action space (an integer for each possible action).
+Initialize a Model: Implement the transformer policy network in your framework of choice (PyTorch is convenient for custom models). Include a policy head (softmax over actions) and a value head (single scalar). Initialize it with small weights. Verify it can forward-pass sample inputs (batch of observations) and output probabilities.
+(Optional) Pretraining: If you have a simple heuristic policy, generate a few thousand self-play games and train the model on predicting the actions (and perhaps outcome) in those games. This can be done with standard supervised learning and should give the model a clue about game structure. Don’t overfit – just a few epochs.
+Self-Play RL Training: Choose an RL algorithm (PPO is a good default). Configure it with the model and environment. Start the training loop.
+If using RLlib: define a MultiAgentEnv or use the self-play policy API, and let it run.
+If doing custom: loop through episodes, collect transitions (state, action, reward, next_state, done). When you have a batch, compute advantages (you’ll need to run the model to get value estimates for states). Then perform policy gradient updates on the model.
+Monitor training statistics: average episode length, win rate of each side, entropy of policy, value loss, etc.
+Evaluation and Opponent Pool: Periodically, save the model and pit the current model against older snapshots or simple baselines to gauge progress. If performance oscillates, introduce some of the stabilization tricks mentioned (e.g., play against a mix of current and past versions).
+Tuning: Adjust hyperparameters based on results. For example, if the agent converges too early to a suboptimal tactic (e.g., always accuse at first opportunity), you might increase exploration or adjust reward (maybe slight negative reward for wrong accusation to discourage random accusing).
+Leverage Framework Tools: Use TensorBoard (or RLlib’s built-in logging) to visualize the training curve. Use any debug output to ensure the transformer’s attention seems to focus on relevant info (if you have the capacity to introspect it).
+Iterate: It might not work perfectly on first try – multi-agent RL can be finicky. Don’t hesitate to incorporate more game knowledge if needed. For instance, if the agent fails to learn to accuse correctly, you could shape the reward: give +0.2 for correctly identifying mafia (in addition to win reward) to amplify that signal.
+Scaling Up: If results are promising, you can scale the training to more compute (multiple GPUs, more parallel games). The learning should only get better with more data. Also consider increasing model size if underfitting (e.g., if it can’t represent the needed strategy).
+Comparison to Known Methods: As a sanity check, you could implement a simpler algorithm like Monte Carlo search or Minimax for a very simplified version of the game (if state space is tiny) to see what the optimal strategies theoretically are. This can be a benchmark to see if the learned policy approaches optimal behavior.
+Testing Equilibrium Behavior: In the end, test if the agent has a stable strategy: play it against itself for many games – ideally black’s winrate vs red should be ~50% (since if one side had >50% consistently, the other could improve strategy). Also test slight perturbations: if you introduce an agent that deviates (say always accuses randomly), does your agent exploit it? A strong agent should exploit dumb strategies (e.g., if mafia always confesses, the citizen should win 100%). So you might create a few hand-coded opponents (random mover, naive bluffer, etc.) and measure your agent’s win rate against them as a measure of robustness.
+Throughout, keep referencing literature to inspire solutions to any issues:
+If training is unstable – recall how PPO + GTrXL was used to stabilize (maybe try a smaller learning rate or add gating).
+If the agent doesn’t explore certain strategies – maybe use self-play population ideas (train a new policy from scratch against the current one, sometimes that finds a different way to play).
+If equilibrium convergence is a concern – reading the DeepNash science paper could give insight on regularization to avoid cycling
+arxiv.org
+.
+Given all these, you have a solid roadmap. To reiterate some concrete references and resources for implementation:
+OpenSpiel (github: deepmind/open_spiel) – has example code for NFSP and policy gradient in multi-agent games
+venturebeat.com
+.
+RLlib documentation – see the section on Self-Play (League Training) which explains how to configure opponent sampling.
+KoiKoi-AI (github: guansanghai/KoiKoi-AI) – code for a transformer in a card game (with README citing their paper)
+github.com
+.
+ReBeL paper and code – for advanced reference on combining search and RL
+arxiv.org
+.
+AlphaStar blog (DeepMind) – describes the league training and architecture at a high level
+deepmind.google
+deepmind.google
+.
+OpenAI Five analysis by Gwern – provides insight into the training process and resource usage, and emphasizes the simplicity of the algorithm vs the complexity of the task
+reddit.com
+reddit.com
+.
+“Human-level Pokemon via Offline RL” paper – an example of using offline data and transformers to succeed in an imperfect-info competitive game
+arxiv.org
+arxiv.org
+.
+DeepNash (Stratego) paper – for understanding how they achieved equilibrium play model-free
+arxiv.org
+.
+Cicero (Diplomacy) paper – shows how to integrate an RL agent with a language model, if ever needed
+lesswrong.com
+lesswrong.com
+.
+By combining the lessons and techniques from these works, you’ll be well-equipped to build a strong AI for your two-player Mafia game. It’s an exciting project at the intersection of deep learning, game theory, and sequential decision making. Good luck, and may your agent learn to deceive and deduce with skill!
+References (Key Resources)
+Heinrich & Silver (2016), “Neural Fictitious Self-Play,” introduced an end-to-end approach for learning Nash equilibria in imperfect-info games via RL + supervised learning
+medium.com
+.
+OpenAI Five (2019) – used PPO with LSTM at unprecedented scale to achieve superhuman Dota 2 play
+reddit.com
+reddit.com
+.
+Vinyals et al. (2019), “AlphaStar,” combined transformers and LSTMs in a multi-agent league to master StarCraft II
+deepmind.google
+deepmind.google
+.
+Brown et al. (2020), “ReBeL: Reinforcement Learning and Search for Imperfect-Information Games,” achieved superhuman poker by integrating search with self-play RL
+arxiv.org
+.
+Perolat et al. (2022), “Mastering the Game of Stratego with Model-Free Multiagent RL (DeepNash),” introduced Regularized Nash Dynamics for stable learning in huge games
+arxiv.org
+.
+Li et al. (2022), “CICERO: Human-Level Diplomacy with RL and Language Models,” combined a strategic RL agent with a 2.7B transformer for dialogue to play Diplomacy at a human level
+lesswrong.com
+lesswrong.com
+.
+Guan et al. (2023), “Learning to Play Koi-Koi with Transformers,” demonstrated a transformer-based policy learning a complex two-player card game via self-play (code available)
+github.com
+.
+Grigsby et al. (2025), “Human-Level Pokémon via Offline RL with Transformers,” showed that large transformers trained on gameplay data (and fine-tuned with self-play) can achieve top human performance in a partially observable game
+arxiv.org
+arxiv.org
+.
+OpenSpiel (2019) – an open-source framework by DeepMind supporting many game environments and algorithms for multi-agent RL research
+venturebeat.com
+venturebeat.com
+.
+
+
+
+
+
+
+Sources
+
+
+
+
+
+
+You said:
+Question about transformer size - even that we are presenting this as two player game we have a large amount of possible game setups (ie if we use 10 players real world game random seating would produce many unique seating arrangement which would affect strategy right?
+
+
+ChatGPT said:
+
+Thought for 47 seconds
+Below is a practical way to think about “how big does my transformer need to be?” once you move from the toy 2-player abstraction back to a real Mafia-style game with, say, 10 seated players and many possible hidden-role assignments.
+
+1 · Why more seats ≠ an exponential parameter blow-up
+What actually grows	How to handle it in the network	Does this force a bigger model?
+Number of tokens per turn
+(one token per player + maybe a phase token + one token per past public move)	Treat each player (or each “entity”) as its own token embedding and let self-attention reason over the set of players. This is exactly what AlphaStar did with up to ~400 unit tokens per frame 
+xlnwel.github.io
+.	10 players is still tiny for a transformer—100 tokens/turn is routine.
+Permutation of seatings / role assignments	Make the policy permutation-invariant (or at least equivariant). Two easy routes: (a) randomise the seating order every episode so the model can’t overfit to seat index, or (b) use a Set Transformer / entity-transformer encoder that is provably permutation-invariant 
+arxiv.org
+.	No—capacity needn’t scale with the factorial of seats because invariance lets one set of weights cover all seatings.
+Combinatorial hidden-role space (e.g. 2 mafia chosen from 10 players ⇒ 45 possibilities)	Hidden roles appear only through behavioural signals; the model does not need to enumerate all combinations—just infer beliefs from history. In practice, a moderate-sized transformer can learn this mapping, just as poker AIs learn 1 000 000 + private-card combinations with <100 M parameters.	Bigger dataset matters more than bigger parameter count here.
+
+2 · Heuristic sizing rules
+Project scale	Typical config (d_model, layers, heads)	Params	When it’s enough
+Prototype / laptop	(128, 4, 4)	≈ 1 M	Verifying env & reward wiring
+Serious experiment on 1-4 GPUs	(256, 6, 8)	8 – 12 M	Most research-grade papers on small imperfect-info games hit strong play in this range (e.g. Koi-Koi card AI)
+“OpenAI Five on a budget”	(512, 12, 8)	60 – 80 M	Lets you absorb many more self-play games without under-fitting
+Large-scale / language-level	(768-1024, 24+)	200 M +	Only justified if you intend to plug in natural-language chat like CICERO
+
+Why stop at ~100 M? OpenAI-style scaling-law work shows returns diminish once model size eclipses the available training compute and data 
+arxiv.org
+. With a few hundred million self-play steps, a 50 M-parameter model is already compute-optimal.
+
+3 · Architectural tricks for many players
+Entity tokens + shared weights
+Embed each player identically (same weight matrix) so the model generalises to any roster size. AlphaStar’s pointer-network head and subsequent entity transformers did exactly this for variable unit counts 
+xlnwel.github.io
+.
+
+Permutation-invariant encoders
+Replace full self-attention with a Set Transformer block (uses “inducing points” to cut O(N²) to O(N·k)) when player count grows 
+arxiv.org
+. Ten players won’t strain quadratic attention, but this is future-proof if you simulate crowds.
+
+Relative-seat features instead of absolute IDs
+Provide the model with relative position (“next-clockwise”, “across-table”) rather than absolute seat numbers so one set of learned patterns covers every seating permutation.
+
+Efficient attention for long conversation histories
+If you log all chat and night actions, sequence length, not token count per turn, may dominate. Architectures such as Perceiver/Perceiver IO scale linearly via a latent bottleneck and drop-in for the encoder 
+arxiv.org
+.
+
+4 · Practical checklist
+Do this	Why
+Canonicalise observation so the observing player is always “index 0”; rotate the seat array accordingly.	Cuts symmetry and halves data needed.
+Mask invalid action logits every turn.	Prevents the policy from wasting capacity modelling illegal moves.
+Start with a 256-hidden-dim, 6-layer transformer; watch for under-fit (high training loss, plateaus) then scale to 512×12 only if needed.	Empirically enough for poker-sized imperfect-info tasks.
+Keep entropy regularisation non-zero so the agent learns a mixed strategy; larger models can shrink entropy faster—monitor KL to catch premature collapse.	Games of deception punish determinism.
+Random-permute seats each episode during training even if you encode seat tokens.	Encourages permutation invariance without special layers.
+Profile memory: 10 players × 30 turns ≈ 300 tokens → with d_model = 512 the largest attention matrix per layer is 300² ≈ 90 k elements—only ~0.7 MB in FP16. Plenty of headroom.	Confirms quadratic attention is still cheap.
+
+5 · When to go bigger
+You’re collecting >10 B steps of self-play and see validation-win-rate still climbing with capacity.
+
+You add natural-language chat and need the model to generate sentences (then you jump to 700 M + like CICERO’s dialogue LM 
+openreview.net
+).
+
+You embed the full 10-player Mafia, not the 2-team abstraction: more hidden roles, longer debates, multi-target actions → more tokens/turn.
+
+Unless you hit one of those, stay in the 10-50 M parameter bracket—cheap enough to iterate fast, large enough to learn robust deceit and deduction.
+
+TL;DR
+Even with 10 distinct seats and many hidden-role permutations, the state grows linearly in the number of players, not exponentially. A transformer that treats each player as a token and relies on permutation-invariant attention handles the complexity without blowing up parameter count. Start small (≈10 M params), scale only when the learning curve—or your profiler—tells you you’re bottlenecked.
+
+
+
+
+
+
+
+
+
+
+
+
+Sources
+You said:
+Does that matter that rules of the game actually make some difference. By rules of the game first player starts and then second etc on second day player 2 starts the round. So for example if black team occupies seats 1,2,3 their strategy could be different than they on seats 4,7,9 for example. For read team I presume there’s not much difference since they do not know where mafia is and from perspective of red player it only knows its own role for sure and roles of other players is a probability 
+
+
+ChatGPT said:
+
+Thought for 25 seconds
+Does seat order matter? — Yes, so encode it, but encode it smartly
+Because the game master always lets seat 1 speak first on Day-1, seat 2 first on Day-2, and so on, a mafia cell sitting in 1-2-3 really can execute a different, often stronger, opening than if it were scattered across 4-7-9.
+That temporal privilege is public information, so a strategic agent should condition its plan on where each conspirator sits.
+
+How to expose that fact to a transformer without blowing up model size
+Design goal	Concrete trick	Why it works
+Different strategies for different speaking orders	Give every player token an absolute seat-index embedding (0-based around the table) and a relative-turn embedding (“how many turns until this player starts the next day”).	Lets the network notice patterns like “I speak first tomorrow ⇒ I can frame someone now”.
+Generalise across any permutation of seats	Before passing the sequence to the model, rotate the table so that the current speaker is always token 0, then append a TurnStart token.	This normalses input; the transformer needn’t re-learn the same tactic for 10! seatings.
+Avoid quadratic memory blow-up as N grows	Use a Set Transformer / inducing-point attention block for the player-token set. It is provably permutation-invariant and scales self-attention from O(N²) to O(N·m) with m inducing points 
+proceedings.mlr.press
+.	10 players ⇒ 100 pairwise queries, but that is still trivial for GPUs; this just future-proofs larger variants.
+Keep parameter count modest	Share one token-type embedding matrix across all seats and roles; the only role-specific info is a binary “mafia?” flag in the token. AlphaStar handled hundreds of SC-II units with only three transformer layers this way 
+arxiv.org
+.	Capacity grows with features, not with the factorial number of seatings.
+
+Why you don’t need a gigantic model
+Even after you restore the full 10-seat table, the observation each turn is only:
+
+csharp
+Copy
+Edit
+[CLS]  + 10×(player_token)  + PhaseToken  + last-k public actions
+With d_model = 256, 6 layers, 8 heads, that is ≈ 10 M parameters—small by modern standards.
+Scaling-law work shows that once your training compute is in the hundreds of millions of token-updates, adding parameters beyond the compute-optimal frontier gives diminishing returns 
+arxiv.org
+.
+So start around that 10-50 M bracket; grow only if validation win-rate is still climbing when you saturate your GPUs.
+
+Practical checklist for seat-aware play
+Canonicalise: rotate so “current speaker is index 0”, then feed the whole sequence to the transformer each turn.
+
+Encode seats: absolute seat-ID, plus “speaks_in t” relative index → two small embeddings summed into the player token.
+
+Mask actions: illegal moves for a player in a given phase get -inf logits, so the model never wastes probability mass.
+
+Randomise seating every episode during training—forces the policy to use those embeddings instead of over-fitting.
+
+Keep entropy > 0 in PPO so the learned policy remains a mixed strategy; deterministic play is easy to exploit in social-deduction games.
+
+What about the red (innocent) player?
+You are right: from any single red player’s viewpoint, seat IDs carry no private information, only public order.
+Still, order matters for deduction (who had the first chance to accuse, who responded quickly, etc.), so the same seat/turn embeddings help the red policy weigh conversational timing when updating its implicit beliefs.
+Because both roles share the network, what the mafia side learns about “strong seat 1 openings” also informs the innocent side’s counter-strategy.
+
+Bottom line:
+Seat layout and day-start rotation do change optimal play.
+Encode that structure as lightweight positional features, randomise seatings each episode, and your mid-sized transformer will learn separate, context-appropriate tactics for mafia cliques in 1-2-3 versus 4-7-9—without needing a parameter explosion.
+
+
+
+
+
+
+
+
+
+
+
+Sources
+You said:
+Ok. Let’s talk about tokens now - for example each player during day phase can do multiple things - accuse other player (multiple players if needed), say he believes player x is red player, say he is a sheriff and he did some checks (different tokens) or declare that he is not a sheriff (could be useful move sometimes) , put someone to the vote (that has some strategic implication that you probably think that player is black. I am thinking about some token sequence like 1s5 1+7 1pv4 1<endtoken> which means that player 1 suspects player 5, plays with player 7 put to vote player 4 and then ends his turn. Is this good for transformers?
+
+
+ChatGPT said:
+
+Thought for 13 seconds
+Below is a checklist-style guide for turning a “day-phase move” into a transformer-friendly token stream.
+Feel free to cherry-pick what fits your implementation style.
+
+1 · Principles
+Goal	Practical rule-of-thumb
+Small, fixed vocabulary	Split an action into (action-type, target-index) tokens instead of inventing a new string for every “1pv4”.
+Easy generalisation across seat permutations	Represent the actor implicitly: the current speaker is always token 0 in the stream. Only the targets need an explicit player-ID token.
+Clear turn boundaries	Insert a single <EOS_TURN> token after a player finishes; the next token is implicitly “next speaker”.
+Make arguments explicit	If an action takes k targets (e.g. “accuse P5 and P7”), emit the action-type once, then k target tokens.
+Stable sequence length	Rarely, a talkative player might emit many statements; set a hard cap (e.g. 8 tokens) per turn and clip or summarise beyond that.
+
+2 · A Concrete Token Grammar
+Assume 10 seats labelled 0-9.
+Define an integer token ID for every <ACTION> and for every <PLAYER>.
+
+Category	Example token IDs	Notes
+Special	<CLS> </TURN> </DAY>	Use <CLS> for pooled representation & turn/day delimiters.
+Phase	<DAY_1> … <NIGHT_5>	Lets the net condition on timing.
+Role claims	<CLAIM_SHERIFF> <DENY_SHERIFF>	One token each.
+Belief statements	<SUSPECT_BLACK> <SUSPECT_RED>	Output followed by a <PLAYER_x> token.
+Vote actions	<PUT_TO_VOTE>	Again followed by a target player token.
+Player IDs	<P_0> … <P_9>	Shared across both teams; embed once and reuse.
+
+Example stream for your scenario
+“Seat 1 accuses seat 5 of being black, says seat 7 seems red, puts seat 4 to a vote, then ends turn.”
+
+php-template
+Copy
+Edit
+<CLS>               (always first)
+<DAY_1>
+<P_0>               (speaker is seat 1 after canonical rotation)
+<SUSPECT_BLACK>  <P_4>
+<SUSPECT_RED>    <P_6>
+<PUT_TO_VOTE>    <P_3>
+</TURN>            (signals control passes to next seat)
+Lengths: 1 <CLS> + 1 phase + 1 actor token + 6 action/arg tokens + 1 </TURN> → 10 tokens — trivial for a transformer.
+
+3 · Why this scales and trains well
+Vocabulary stays tiny (≈ 30–40 tokens) no matter how many seats; player IDs are re-used arguments, not new words.
+
+Permutation invariance: before feeding the sequence, rotate the seat list so that the speaker is always <P_0>.
+The model learns one policy that generalises to any seating.
+
+Attention can learn relations: because targets are explicit tokens, the self-attention matrix sees (actor ↔ target) pairs directly. No need for handcrafted “action strings”.
+
+Easy masking: at each step you know which <PLAYER_x> choices are legal (e.g. can’t vote yourself) – set their logits to -∞ before softmax.
+
+4 · Implementation sketch (PyTorch / RLlib)
+python
+Copy
+Edit
+# pseudo-code
+obs_tokens = [
+    CLS,
+    phase_id[day, phase],
+    P0,                              # speaker
+    SUSPECT_BLACK, P5,
+    SUSPECT_RED,   P7,
+    PUT_TO_VOTE,   P4,
+    TURN_END
+] + pad_to_fixed_length
+
+logits = transformer(torch.tensor(obs_tokens)[None])      # [1, L, d]
+action_logits = action_head(logits[:, -1])                # only last position
+Transformer size: start with d_model=256, n_layers=6, n_heads=8.
+Plenty for 10-player Mafia and cheap to train.
+
+Policy head: projects the final token’s hidden state to |A| logits.
+|A| = (num action-types) + (num players for argument) + 1 <NO_OP>.
+
+Value head: a linear layer on the <CLS> hidden state.
+
+5 · Variations and extensions
+Need	Tweak
+Multiple targets (e.g., “accuse P5 & P7”)	Emit the <SUSPECT_BLACK> token once, then a set of <P_x> tokens; mask “duplicates”.
+Numeric info (e.g., “I checked = black 60%”)	Either quantise the probability into bins (<PROB_0.6>) or supply it as a separate scalar feature concatenated to the embedding.
+Very long debates	Slide a fixed-length window (last N tokens) or use memory tokens as in GTrXL/Transformer-XL so history doesn’t explode.
+Hierarchical turn summary	Optional: pre-encode each player’s turn with a tiny MLP, output one “turn embedding”, then feed a higher-level transformer over turns. Not needed unless you hit GPU memory ceilings.
+
+TL;DR
+Yes – linearising a player’s day actions into a short token stream is exactly what transformers like.
+
+Break composite strings (“1s5”) into (verb, argument) tokens so the vocabulary is fixed and interpretable.
+
+Use <EOS_TURN> to mark turn boundaries and rotate seats so the current speaker is always <P_0>.
+
+With a 30-token vocabulary and ≤ 100 tokens per day, a 10 M-parameter transformer is ample.
+
+
+
+
+
+
+
+
+You said:
+Well I need full variety of possible actions… so accuse player x should be 10 different tokens or we should use something like <accuse><5> as two tokens or it does not matter much?
+
+
+ChatGPT said:
+
+Thought for 5 seconds
+Should “accuse player x” be one token or two?
+(Short answer: split it into two (<ACTION>, <TARGET>) tokens or two logits in the policy head. That scales, generalises across variable-sized tables, and lets the network share statistics across all “accuse” moves. If you keep only 10 seats forever and you want the simplest possible code, a single “ACCUSEx” token is fine—but it will cost more parameters and data and can bite you later.)
+
+1 · Why factorising the action usually wins
+Single composite token “ACCUSEx”	Two-part token “ACCUSE + x” / multi-head logits
+Output space size grows with players: `	A
+Sample complexity: model must see each “ACCUSEx” often enough to learn it.	Learns “what accusing means” from all targets combined; needs fewer examples per target.
+Generalisation: adding 11ᵗʰ seat needs 11 new tokens.	Target head already handles any ID ∴ no re-training.
+Memory & compute: each extra composite token adds a row in the final linear layer.	Final layer size grows with verbs + targets, not their product.
+Code simplicity: just one categorical sample per step.	Requires two samples (verb then arg) or a pointer net; but RLlib & SB3 support multi-discrete actions.
+Masking legality: must mark every illegal composite token as -∞.	Mask at verb level (if the verb is disallowed) and/or target level (if self-vote illegal).
+
+Numbers
+10 seats · 6 day-verbs · 4 night-verbs →
+Composite: 60 + 40 = 100 logits.
+Factorised: 6 + 4 verb logits + 10 target logits = 20 logits.
+Parameter saving is tiny here—but the data efficiency gain (shared statistics across targets) is non-trivial.
+
+For larger or variable tables the composite blow-up is dramatic (e.g. 15 seats ⇒ 6·15=90 “accuse” tokens just for that one verb).
+
+2 · Implementation patterns
+A. Multi-Discrete policy head (most straightforward)
+text
+Copy
+Edit
+verb_logits    : shape [|VERBS|]      # e.g. ACCUSE, CLAIM_SHERIFF, PASS …
+target_logits  : shape [N_PLAYERS]    # pointer to seat ID
+Sample or arg-max verb.
+
+If that verb requires a target, sample arg from the target_logits (after masking illegal seats).
+
+Push (verb, arg) into the environment; ignore arg for verbs that need none.
+
+Most RL libraries (e.g. stable-baselines3 MultiCategorical or RLlib’s Tuple action space) support this natively.
+
+B. Pointer network (what AlphaStar did)
+Treat each player token in the transformer’s output sequence as a potential pointer target.
+
+Add a dot-product pointer head: p(target=i) = softmax(h_t ⋅ h_player[i]), where h_t is the speaker’s hidden state.
+
+Choose verb from a small softmax, target from the pointer distribution.
+Works even if the table size changes mid-game, because the pointer queries the live set of player tokens, not a fixed‐size output layer.
+
+C. Two-token autoregressive output
+Policy generates a token sequence: first ACCUSExxx, then <P_5>, then maybe another action, etc.
+
+At inference you run the transformer in autoregressive mode until it emits </TURN>.
+
+Pros: elegant “language-like” formulation (Decision Transformer style).
+
+Cons: slower rollout (one forward per micro-token) and harder credit assignment in RL.
+Use this only if you want full natural-language style turns.
+
+3 · Practical guidelines
+Checklist item	Reason
+Rotate the seating so the current speaker is always index 0.	Eliminates permutation variance; target head simply points to index ∈ [1, N-1].
+Embed seats once, share across roles.	Same player-ID embedding works for mafia & red; less memory.
+Mask invalid targets every step.	Stops the policy from wasting probability mass; speeds learning.
+Keep entropy bonus on the verb head.	Encourages mixture strategies (essential for bluffing).
+If you add >10 seats later, stick to the factorised scheme—composite tokens will explode.	
+
+4 · When a composite token is acceptable
+Hard-coded 2-player abstraction: each role has only a couple of actions; enumerating them keeps code tiny.
+
+Research prototype where wall-clock time matters more than long-term scalability.
+
+You need one sampling step only (some old PPO implementations can’t handle multi-categorical without hacks).
+
+Even then, keep the lexicon minimal (don’t bake in seat index and day number, etc.). If you later upgrade to factorised, the replay buffer stays mostly usable.
+
+TL;DR
+Use <ACCUSE> + <TARGET> (two tokens or two logits).
+It shares statistics, adapts to any table size, and is the standard trick in modern multi-agent transformer systems (AlphaStar, DeepMind Control Entity-Transformers, Diplomacy CICERO’s pointer head).
+Reserve “one-token-per-action-argument” only for throw-away demos or environments with truly tiny, fixed action spaces.
+
+
+
+
+
+
+
+
+You said:
+As professional mafia player I know that there’s some implicit rules of the game/strategy ideas that successful players uses - for example mafia should say they are sheriff sometimes to try to win against other true sheriff or there’s some voting combinations that makes some combinations of black players impossible , would out model learn all that?
+
+
+ChatGPT said:
+
+Thought for 15 seconds
+Will a self-play transformer discover “professional-level” Mafia heuristics like fake-sheriff claims, parity checks, or elimination‐voting traps?
+Short version: Yes—if you give it (1) the expressive action space you sketched, (2) enough self-play, and (3) opponents that force it to adapt.
+Below is why that works in practice, what can block it, and what you can do to speed things up.
+
+1 · Why emergent strategies appear in self-play
+Real system	Emergent behaviour learned with no human labels
+AlphaGo	“Move 37” — a shoulder-hit never seen in 2 000 years of Go theory 
+en.wikipedia.org
+AlphaStar	Invented surprise Protoss unit-composition timings and map-specific wall-offs 
+nature.com
+DeepNash (Stratego)	Learned to bluff its flag location and lay “lure bombs”, tactics known only to top humans 
+arxiv.org
+
+All three agents used pure self-play RL (plus league training in AlphaStar, regularised dynamics in DeepNash). Their networks were never told “invent a fake claim” or “bluff”; those tactics emerged because:
+
+Expressive policy – a network large enough to represent dozens of conditional branches.
+
+Search or memory – the agent could forecast how an opponent would react.
+
+Adversarial curriculum – continual games against stronger or different past policies forced innovation.
+
+Your Mafia transformer meets (1) and (2) if it encodes:
+role flag + seat embeddings + the factorised action grammar (<CLAIM_SHERIFF>, <TARGET_ID> etc.).
+Give it (3) with a league or opponent-pool so it never overfits to one meta.
+
+2 · What could prevent those heuristics from surfacing
+Failure mode	Symptom	Fix
+Sparse exploration	Mafia never tries a sheriff claim → citizen never learns counters.	Keep entropy bonus > 0, randomise seating, and occasionally inject ε-greedy noise or “explorer” agents that seek novel action sequences.
+Early convergence	Policy locks into “accuse immediately” every game.	Lower PPO clip, raise entropy, add historical opponents (PFSP/league) to punish brittle strategies.
+Action masking too tight	If you forbid clearly sub-optimal moves (e.g., mafia claiming sheriff on Day 1) the model never learns when that gambit is good.	Mask only truly impossible actions; let foolish actions stay legal so they can be punished and eventually used conditionally.
+Observation too coarse	The network can’t see the difference between “I speak first tomorrow” and “I speak last”.	Include seat-order and phase tokens exactly as in your grammar, or the tactic of “first-speaker fake-claim” is invisible.
+
+3 · Accelerators if you want guaranteed expert heuristics
+Scripted curriculum
+
+Phase A: pre-train on games where a rule-based mafia script fake-claims 20 % of the time.
+
+Phase B: turn scripts off and let self-play continue.
+This seeds the policy with the idea that the action may be profitable, but still lets RL decide when.
+
+Auxiliary prediction heads
+Add a small head that tries to predict “is opponent mafia?” at each time-step. Back-propagating that cross-entropy encourages internal belief modelling, which in poker agents is known to improve bluff detection.
+
+Population exploiters
+Borrow AlphaStar’s league-exploiter: spin up a side agent whose only objective is “beat the main mafia if it fake-claims sheriff”.
+The main agent must then diversify its mix of honest vs. fake claims to survive.
+
+4 · How to measure whether the tricks were learned
+Test	What to look for
+Against scripted baselines	Mafia win-rate ↑ when fake-sheriff claim is allowed, ↓ when forbidden → the model recognises its value.
+Ablation	Remove the <CLAIM_SHERIFF> token at inference; sharp drop in mafia ELO shows reliance on that tactic.
+Attention inspection	When the citizen hears “I’m sheriff”, attention heads should spike on that token and on earlier night logs—evidence the model updates its belief state.
+Counterfactual analysis	Replay identical game up to Day 2, then flip mafia’s action from claim sheriff to say nothing: observe downstream win-prob change.
+
+5 · Bottom line
+A mid-sized (10–50 M parameter) transformer, trained with self-play PPO + historical opponent pool on the factorised action grammar, will normally invent classic human heuristics—fake role claims, parity voting traps, bait accusations—because those moves increase expected win-rate.
+
+The key is to let the agent explore and face adaptive adversaries.
+If it still stalls, bootstrap with a short scripted curriculum or auxiliary belief-prediction losses, then release it back into open self-play. That’s the recipe that produced AlphaGo’s Move 37, AlphaStar’s novel StarCraft builds, and DeepNash’s bluffing—there’s every reason to expect the same emergence in Mafia.
+
+
+
+
+
+
+
+
+
+
+
+
+Sources
+You said:
+Ok here’s another question for example I will train this abstract game network. What if I will want to invent some other strategies. For example in real game there’s option to interrupt other player speech with your statement for example “I am sheriff checked 5 he is red” will I be able to add it later after I trained network or I will have to retrain ?
+
+
+ChatGPT said:
+
+Thought for 11 seconds
+Can you add a brand-new move (“interrupt speech + claim sheriff”) without starting from scratch?
+1 · Yes—if your action interface was factorised from the start
+Because we already model a day-phase turn as two logits
+verb_logits (|VERBS|) + target_logits (N)
+
+or as a pointer-network verb token + target token sequence, adding
+
+text
+Copy
+Edit
+<INTERRUPT_CLAIM_SHERIFF>
+is just
+
+Step	What you actually change
+Embed a new verb	Extend the verb-embedding matrix by one row (random or small-norm init).
+Expand the policy head	Add one extra column in the verb soft-max layer. No change to the target head.
+Tell the env	Update the PettingZoo / RLlib action space so the new verb is legal only while another player is speaking.
+
+No other weights need to be re-initialised, so you can warm-start from the old checkpoint and keep training.
+
+If you’d chosen a single composite token per “verb × target”, you would now need
+10 extra tokens (one per seat) and a wider soft-max—still possible but heavier and with zero transfer.
+
+2 · How to keep old skills while the net learns the new trick
+Self-play fine-tuning alone can work, but two well-known continual-learning tricks make it safer:
+
+Problem	Quick safeguard
+Catastrophic forgetting (model stops using earlier high-EV openings)	Elastic Weight Consolidation (EWC): add a Fisher-information penalty that keeps weights critical to old strategies from drifting. The original EWC paper showed it works in RL tasks too 
+arxiv.org
+wired.com
+.
+Unbalanced curriculum (new verb almost never explored)	Start with a small exploration prior: play each turn with p(verb=INTERRUPT) ≈ 0.05 for 1–2 M frames, anneal to entropy bonus only. ARC-RL and later Self-Evolution Continual RL papers demonstrate that a temporary “action-drop-in” schedule speeds adoption when the action set expands 
+openreview.net
+.
+
+Add the new verb, keep entropy regularisation > 0, and retain your historical-opponent pool. The pool forces the fresh policy to stay good at the pre-existing meta while experimenting with interruptions.
+
+3 · Practical fine-tuning recipe
+Checkpoint your best transformer.
+
+Patch code
+
+python
+Copy
+Edit
+VERB_LIST += ["INTERRUPT_CLAIM_SHERIFF"]
+policy_head.weight  = nn.Parameter(
+     torch.cat([old_W, 0.01*torch.randn(1, d_model)], dim=0))
+policy_head.bias    = nn.Parameter(torch.cat([old_b, torch.zeros(1)]))
+Replay buffer seeding
+
+Keep 10 k – 50 k old games in the buffer (off-policy samples) so PPO’s advantage estimates still contain pre-update situations.
+
+Fine-tune with PPO
+
+Lower learning-rate 2 × .
+
+KL-penalty or EWC: λ ≈ 1.
+
+Entropy bonus unchanged; optionally add a one-time exploration prior on the new verb.
+
+League training on: the new policy still faces frozen older snapshots. If performance drops vs. them, increase EWC λ.
+
+A/B test
+
+Mafia win-rate vs. scripts that never interrupt should rise.
+
+Win-rate vs. old checkpoint should stay within ±2 % once training stabilises.
+
+4 · Extending the vocabulary: transformer mechanics
+Adding one extra token is standard practice in NLP fine-tuning: simply append it to the embedding table and (if you use positional encoding) nothing else changes 
+arxiv.org
+angelina-yang.medium.com
+. Because we share the same transformer layers for policy & value, all earlier representations stay intact; the new row learns from scratch while attending to pre-existing context.
+
+5 · When would you really need a full retrain?
+Situation	Why fine-tuning might fail	Pragmatic answer
+Massive rule change (e.g. add a night-investigation phase with simultaneous moves)	Old hidden-state representations no longer align with new temporal order; early layers over-specialised.	Freeze only the first K layers; re-initialise the temporal-positional embeddings and higher layers.
+Action explosion (dozens of new speech acts + free-form chat)	Policy head grows by > 2×; earlier layers might lack capacity.	Spin up a larger transformer but distil knowledge from the old one (use KL loss between old and new logits on historic games).
+Observation shift (new private cards / roles)	Old embeddings missing critical features.	Add feature tokens + partial re-train; or consider ReBeL-style search to handle combinatorial new hidden info.
+
+For a single new move like “interrupt-claim”, fine-tuning is almost always faster and safer than starting over.
+
+TL;DR
+Factorised verb + target design pays off now: insert one new verb token, widen the verb head by one logit, keep everything else.
+
+Continue PPO self-play from your checkpoint; sprinkle in exploration of the new verb.
+
+Use EWC or a KL penalty to stop the net forgetting old openings.
+
+No full retraining needed unless you overhaul the game’s phases or explode the action set.
+
+
+
+
+
+
+
+
+
+
+
+
+Sources
+You said:
+Next question - let’s say I have this small model for strategic play, which operate on this game move tokens but real game involves reading other players speech and producing your own utterance. How we would be able to integrate it?
+
+
+ChatGPT said:
+
+Thought for 33 seconds
+How to bolt natural-language conversation on top of your token-based Mafia agent
+(…without throwing your existing training away)
+
+0 Why you almost never want “one giant end-to-end LLM”
+Different skills, different scales.
+
+Tactical reasoning over hidden roles: can be done with a 10-50 M-parameter transformer running at 2–3 µs per step on GPU.
+
+Fluent English: even the smallest open-source models that humans don’t instantly spot as bots are >1 B parameters.
+A single model that does both makes roll-outs slow and training data-hungry.
+
+Cicero’s lesson. Meta’s Diplomacy agent reached human-level play by coupling a 2.7 B-parameter dialogue LM to a much smaller strategic module; each sees a narrow interface, not raw board state vs. raw text 
+noambrown.github.io
+.
+
+So we follow the same modular recipe:
+
+pgsql
+Copy
+Edit
+incoming chat  ─┐            ┌─> natural-language reply
+                ▼            │
+            NLU / parser ───►│
+                              │   belief embeds
+         public game state ───►  STRATEGIC CORE  ──► move tokens
+                              │   + intent token
+ private role bits ───────────►│
+                               ▼
+                    NLG / surface realiser
+1 NLU: turn free text → compact embeddings or “dialogue-act” tokens
+Layer	What it does	How to build/train
+Sentence encoder	Convert each utterance into a fixed vector (or classify into dialogue acts such as Accuse, Claim-Sheriff, Deny, Ask-Alibi).	Fine-tune a small BERT/T5 on 2 – 5 k labelled Mafia transcripts (or synthetic ones from LLM self-play) using standard dialogue-act classification datasets/workflows 
+paperswithcode.com
+.
+History summariser (optional)	Compress last K utterances into a single “conversation state” to keep transformer sequence short.	You can freeze the encoder and train a tiny GRU/Transformer-XL on self-play logs (labels = next utterance) so that it learns a lossy but useful summary.
+Output to strategy net	Provide <player-id, act-type, embed> tuples or just an “utterance embedding” token per speaker.	Adds ≤ 10 tokens/turn, trivial for the strategic transformer.
+
+Tip: start with coarse acts (Accuse, Claim, Vote, Pass). If you later need fine-grained language cues (tone, hedging words) you can swap in a larger encoder and keep the rest unchanged.
+
+2 Strategic core stays almost exactly as you trained it
+It now gets extra tokens representing the parsed speech or its embeddings.
+
+If you used the “factorised verb + target” grammar (previous answer) no architectural change is needed: the new tokens are just more context.
+
+Fine-tune a bit (lower LR) so the network learns to exploit the new information; because the backbone parameters start near-optimal, 1-2 M frames of additional self-play is often enough.
+
+3 Intent layer: pick what to communicate, not how to phrase it
+Add a small head to the policy that chooses a discrete “communication intent” every time the agent may speak, e.g.:
+
+makefile
+Copy
+Edit
+INTENT =  { PASS,   ACCUSE(target),   CLAIM_SHERIFF(target),
+            RESULT_NIGHT_CHECK(target, result), … }
+Why discrete?
+Cicero found that mapping strategy → dialogue acts first, then letting the LLM paraphrase those acts, gave much more truthful, on-plan messages and let the policy learn with sparse RL signals 
+noambrown.github.io
+.
+
+Implementation options:
+
+Approach	Pros	Cons
+Additional logits in the existing policy head	Minimal code; joints training of moves & speech tactics.	Coupling might slow convergence; you may need separate entropy coeffs.
+Separate intent head (shares trunk)	Lets you weight speech-reward (e.g. “was message accepted?”) differently from win/loss reward.	One more output layer.
+
+During self-play you can reward intents indirectly: if partner accepts your proposal and you win more, gradient will flow; explicit “convincing reward” is optional.
+
+4 NLG: surface text generator conditioned on {history, intent}
+Start with an LLM fine-tuned on Mafia chat logs (or synthetic dialogues).
+
+1.3 B – 7 B params (e.g. LLaMA-7B, Mistral-7B) is enough for convincing short utterances.
+
+Freeze or very slowly fine-tune (low-LR PPO with human preference reward) so you don’t destabilise grammar.
+
+Conditioning trick (Cicero-style):
+
+Concatenate: [GAME_STATE_SUMMARY] + [PRIOR_CHAT] + <INTENT_TOKEN> + “[YOUR MESSAGE:] ”
+and let the LLM complete the string.
+
+Provide control tokens per intent so you can filter beam search to messages that actually express the intent.
+
+Safety / consistency filter:
+
+Score the generated message with a relevance classifier to ensure it aligns with the chosen intent and game facts.
+
+Reject and resample if not (Cicero did exactly that, calling it “grounding check” 
+noambrown.github.io
+).
+
+Latency: run LLM generation asynchronously; strategic game loop can continue using last valid utterance if delay unacceptable.
+
+5 Training schedule in practice
+Phase	What you train	Data / reward
+A. Supervised bootstrap	NLU encoder + NLG decoder on human transcripts (or LLM self-talk)	Cross-entropy, BLEU
+B. Strategic RL (your current model)	Game moves only	Win/loss
+C. Augmented self-play (new)	Fine-tune core + intent head while freezing NLU/NLG	Combined reward: win/loss ± 0.1 · acceptance-rate
+D. RLHF on NLG (optional)	Unfreeze some LLM layers; human label quality of sampled messages	PPO-RLHF or DPO
+
+Because the NLU/NLG weights are mostly fixed, catastrophic forgetting of tactics is unlikely. If you later add a brand-new speech act (“Interrupt + Claim”) you only:
+
+Add the new intent token to the policy head (random init).
+
+Add the matching control token to the LLM’s vocabulary.
+
+Resume Phase C fine-tuning for a few million frames.
+Elastic Weight Consolidation can further protect old skills 
+arxiv.org
+.
+
+6 Interface summary (pieces you have to code)
+Component	Input → output	Lines of code if using HF + RLlib
+Parser	raw chat → (speaker_id, act_type, target_ids, embed)	200–300 (HuggingFace Tokeniser + small finetune script)
+Strategic core	tokens (state + parsed chat) → {move, intent}	already done
+Intent → text	(intent, history) → string	20 (call generate() on LLM) + 50 for grounding filter
+Environment glue	distributes text to opponents, enforces talk-windows	100–200
+
+Everything else—distributed roll-outs, opponent pools, PPO updates—remains exactly as in your token-only setup.
+
+Key take-aways
+Keep speech modular. A separate language stack lets you iterate on wording, tone, or even switch languages without touching the game brain.
+
+Parse → plan → realise. Feed structured speech info into the strategist; feed structured intents out to the LM.
+
+Use the Cicero pattern. It is battle-tested for a negotiation game that is much more language-heavy than Mafia and achieved top-10 % human ranking 
+noambrown.github.io
+.
+
+Fine-tune, don’t retrain. Adding new utterance types means appending one token to the verb head and one control-token string to the LLM—minutes, not months.
+
+Follow this blueprint and your current self-play agent can start reading the room and talking back with minimal additional engineering—and without sacrificing the strategic prowess you have already trained.
+
+
+
+
+
+
+
+
+
+
+
+
+Sources
+You said:
+Now let’s say I will start generating game with producing random actions by players out coming in win of one of the teams. How generation of this random games will help our system to learn a winning strategy? 
+
+
+ChatGPT said:
+
+Thought for 14 seconds
+“If I just roll thousands of random games and label the winner, will that help my agent learn to win?”
+Yes, but only for the early phases of training—and only if you use the random data in the right way.
+Below is a concise playbook that shows where pure-random self-play is valuable, where it breaks down, and how modern RL projects exploit it.
+
+1 · What random trajectories are good for
+Use-case	Why random data helps	How to plug it in
+Discovering the rules & syntax	A random policy touches every legal verb/target pair quickly, so the transformer learns (a) which tokens are admissible, (b) how turns begin/end, (c) what ends a game.	Supervised pre-training (behavioural cloning) on <state → next-token> or masked-language objectives. This is exactly what large language–style “Decision Transformers” do before RL fine-tuning 
+openreview.net
+.
+Cheap representation learning	Self-supervised tasks—predict next observation, contrastive time-step pairs—extract a state embedding without reward. Papers such as APT and CPC-RL show these encoders reduce sample complexity later, even when the roll-outs were fully random 
+openreview.net
+openreview.net
+.	Freeze or slowly fine-tune the encoder when you switch to PPO / NFSP.
+Value-head warm-start	Every random game ends in ±1. Training a critic to regress that target means the value head already outputs something correlated with win probability when RL starts, reducing variance.	Do one epoch of TD(0) or Monte-Carlo regression on the random buffer, then hand the weights to PPO.
+Replay diversity	Sparse-reward games often suffer from early overspecialisation. Mixing in 10-20 % “old” random games (or uniform-random opponents) stabilises training, a trick used in AlphaStar’s league and OpenAI Five’s opponent pool.	Keep a “frozen” random-policy checkpoint in the opponent set throughout training.
+
+2 · Where random data stops helping
+Limitation	Symptom	Fix
+Almost all games are low-quality. Random mafia rarely bluffs, so winning trajectories are < 0.1 % of the buffer.	Offline BC learns a random policy (50 % win-rate ceiling).	Reward-weighted sampling: re-weight or filter the dataset so wins are oversampled (as in Upside-Down RL / Decision Transformer).
+Distribution mismatch. Once the on-policy agent explores deeper turns, states from random play become irrelevant → Q-values diverge.	Value loss spikes when you unfreeze critic.	Combine old buffer with fresh self-play (IMPALA-style V-trace), or discard random data after the first million updates.
+No coverage of “expert” tricks. Fake-sheriff claims or voting traps never appear randomly, so the agent can’t imitate or analyse them.	Policy never discovers advanced tactics.	Move to exploratory self-play quickly; keep entropy bonus high and/or add scripted opponents that demonstrate those tactics.
+
+3 · Concrete pipeline that uses random roll-outs the “smart” way
+mermaid
+Copy
+Edit
+graph LR
+    A(Random Game Generator) -->|50k games| B(Pre-train Encoder)
+    B --> C(Init Policy+Value)
+    C -->|self-play PPO| D(Main Training Loop)
+    D -->|live games| C
+    subgraph Replay Buffer
+        C
+    end
+Generate 10 – 50 k random games (minutes on CPU).
+
+Pre-train the transformer on self-supervised tasks:
+
+next-token prediction
+
+masked-token reconstruction
+
+contrastive “future vs. past” (APT style).
+
+Regression warm-up for the value head on final win/loss.
+
+Start PPO / NFSP self-play, seeding the replay buffer with those games.
+
+Anneal out the random buffer over, say, the first 5 % of training steps.
+
+This is the recipe used—almost verbatim—in Pretraining Representations for Data-Efficient RL (NeurIPS 2021) and in recent “adaptive encoder” papers 
+openreview.net
+arxiv.org
+.
+
+4 · Key hyper-parameters
+Parameter	Safe default	Reason
+Pre-train epochs	1 – 3 on random buffer	Prevent over-fitting to useless behaviour.
+Random-game weight in PPO buffer	Start 0.3 → linearly fade to 0 by 1 M steps	Keeps early advantage but removes stale data later.
+Exploration noise	Keep entropy coeff high (≥ 0.01) until win-rate > 60 %	Needed to climb from random tactics to bluffing.
+Verb-target factorisation	Must stay the same in random and RL phases	So the pre-trained embeddings transfer 1-for-1.
+
+5 · Bottom line
+Random self-play ≠ useless. It is a cheap way to teach the network legal syntax, provide a warm critic, and initialise robust state embeddings.
+
+But it is only a bootstrap. Winning strategies, bluff timing, and seating-order tactics require on-policy, adversarial self-play (or scripted specialists) to appear.
+
+Optimal recipe: pre-train quickly → switch to high-entropy self-play → phase out random data. This matches best practice in modern RL pre-training papers and large-scale game AIs 
+openreview.net
+openreview.net
+.
+
+Follow that playbook and your random-game generator will shave days off training—without anchoring the agent to “pure roulette” play.
+
+
+
+
+
+
+
+
+
+
+
+Sources
+You said:
+Ok so I guess first goal would be to train agent 1 that will beat random agent. Is that a good idea?
+
+
+ChatGPT said:
+
+Thought for a few seconds
+Training “Agent 1 vs. Random” is the right first milestone
+It gives you a sanity-check curriculum:
+
+Why it’s valuable	What you learn if it works
+Environment & model wiring	Does the transformer see every token? Are illegal moves masked? Does reward propagate back?
+Basic tactics	The agent must at least finish games correctly: accuse when certain, vote sensibly, avoid self-destruct moves.
+Credit-assignment test-bed	Sparse +1/-1 rewards are already present; beating random proves PPO/NFSP is handling the signal.
+Reference baseline	You can quote “Agent 1 wins ≈ 90 % vs. random” in every paper/slide; later, stronger opponents should never drop below that.
+
+If it fails you know the issue is architectural or algorithmic—not meta-strategy.
+
+A minimal, practical training plan
+Stage	What to do	Hyper-notes
+0 Build env	Turn-based PettingZoo env; rotate table so current speaker is index 0; action grammar = <VERB> + optional <TARGET>.	Mask illegal targets; random seat shuffle each game.
+1 Random agent	Uniform over all legal verbs; if verb needs a target, uniform over legal seats.	Keep one frozen instance for the whole experiment.
+2 Agent 1 architecture	6-layer transformer, d<sub>model</sub>=256, 8 heads; policy head = `verb_logits (	V
+3 Pre-train (optional)	20–50 k random games → supervised next-token pre-train + value MC regression.	1–2 epochs; LR ≈ 1e-4.
+4 PPO loop	• Collect 4 k–8 k steps per update from Agent 1 vs. random.
+• Compute GAE advantages.
+• 3 PPO epochs, clip = 0.2, LR = 3e-5.
+• Entropy bonus = 0.01 (keep exploration).	Parallelise with ≥ 64 envs so batches mix mafia/citizen roles.
+5 Early-stopping criteria	Stop when win-rate ≥ 80 % for each role measured on 10 k evaluation games (CI ± 1 %).	80 % vs. pure random means the policy is exploiting obvious blunders but hasn’t overfitted to seat luck.
+6 Regression tests	Freeze this checkpoint as “baseline strong”. All future experiments must still beat random at ≥ 80 %.	Saves you from silent regressions when you add new verbs.
+
+Common pitfalls (and fixes)
+Pitfall	Symptom	Fix
+Agent never improves	Win-rate fluctuates around 50 %.	- verify rewards recorded from agent’s viewpoint (citizen must get +1 when red team wins).
+- increase entropy / lower LR.
+- check masking (illegal moves yield 0 prob?).
+Over-fitting to random’s stupidity	Agent reaches 100 % quickly, but later loses to itself.	Start mixing in self opponent after win-rate > 70 %. Keep random in the opponent pool at 10–20 %.
+Role imbalance	Mafia wins 90 %, citizen only 60 %.	Balance training data: ensure each batch has equal mafia/citizen trajectories; or weight loss per role.
+Seat bias	Agent wins mostly when seated 1–3.	Keep seat randomisation, or augment obs with “relative seat” only (remove absolute seat ID).
+
+Next curriculum step
+Historical opponent pool
+After Agent 1 dominates random, freeze it as Checkpoint A.
+Spawn a fresh Agent 2 and train against A + random (80 % A, 20 % random).
+This is NFSP/league style: each new spawn must beat all elders → strategy space widens.
+
+Scripted specialists
+Add tiny heuristics that always fake-claim sheriff, or always vote late.
+If Agent N fails vs. a specialist, you’ve found a blind spot → richer policy emerges.
+
+Self-play only after stability
+Once an agent beats random and its elders, disable random entirely and run symmetric self-play; this prevents ceiling effects.
+
+TL;DR
+Training an agent that reliably crushes a random bot is the perfect first objective.
+It validates environment code, token grammar, reward flow, and PPO stability.
+Just remember to keep the random opponent in your evaluation loop forever—future clever agents should never forget how to exploit pure randomness.
+
+
+
+
+
+
+
+
+You said:
+How much training you think I will need and should I stop training when loss function will became flat?
+
+
+ChatGPT said:
+
+Thought for 29 seconds
+How long will it take Agent 1 to crush a purely-random bot?
+Below is a rule-of-thumb schedule drawn from recent imperfect-information game papers and my own experience with PPO/NFSP runs. Adjust upward or downward depending on your hardware and hyper-parameter tuning skill.
+
+Component	Typical figures in the literature	Concrete target for your Mafia mini-project
+Model	6-layer Transformer, d = 256 (≈ 8 M params) in Koi-Koi AI (2023) 
+researchgate.net
+Same spec (fits on a single 12 GB GPU)
+Experience per PPO update	4 k – 8 k timesteps (IMPALA & RLlib defaults)	8 k turns collected from ≈ 64 CPU envs
+Total game steps until “beats random”	5 × 10⁵ – 2 × 10⁶ for NFSP (Leduc poker) to reach Nash-level exploitability curve 
+arxiv.org
+~1 M turns (≈ 50 k complete games of 20 turns each)
+Wall-clock	8 × 10⁵ StarCraft-II frames per minute on a 1 TPU pod (AlphaStar) 
+cyk1337.github.io
+1 – 2 GPU-days on a single A100 if you batch 64 envs
+
+Quick sanity check:
+At 1 µs per forward pass (8 M-param transformer on A100, fp16) × 1 M turns ≈ 1 s of pure NN time; almost all wall clock goes to Python overhead and PPO optimisation.
+
+When do you stop training?
+1 · Use evaluation metrics, not the PPO loss
+The PPO “surrogate” loss and value loss flatten very early while the policy is still improving—sometimes they even oscillate after you hit the clip threshold.
+
+Instead log a moving win-rate (or Elo) versus:
+
+Random bot
+
+Last frozen checkpoint (to detect regression)
+
+A scripted heuristic (e.g., “always accuses on Day-2”)
+
+Stop once the 95 % confidence interval of win-rate vs. random is ≥ 80 % for both roles and has not increased by more than 1 % over the last K evaluation windows (say K = 10 k games).
+
+2 · Watch entropy and KL, too
+If policy entropy collapses to near-zero while win-rate is still ≤ 70 %, you probably converged to a brittle strategy: raise entropy coefficient or resume exploration.
+
+KL-divergence between successive policies should stabilise around the PPO clip target (≈ 0.01–0.02 for a 0.2 clip). A spike without win-rate gain is over-fitting; slow LR.
+
+3 · Early-stopping heuristic (pseudo-code)
+python
+Copy
+Edit
+if eval_win_rate_random > 0.80 and \
+   abs(eval_win_rate_random - eval_win_rate_random_old) < 0.01 and \
+   policy_entropy  > entropy_floor:
+       stop_training()
+Entropy-floor = 0.05 · log |A| keeps a mixed strategy; turn it lower only after agent starts playing against itself.
+
+Why a flat loss is not a stopping signal
+What plateaus	What it really means
+PPO surrogate loss	The gradient is now clipped every mini-batch; the optimiser just oscillates inside the clip tube. Policy can still refine slowly via unclipped updates.
+Value loss	Once the critic learns “win ≈ +1, lose ≈ –1” further reduction is dominated by stochastic game endings; it plateaus even if policy keeps improving.
+Actor entropy	May plateau because exploration term decays—even while strategy quality continues to rise.
+
+Hence trusted projects (AlphaGo Zero, OpenAI Five, AlphaStar) ignored training loss for model selection; they used Elo vs. a validation pool and never stopped until Elo ceased to rise for many eval cycles.
+
+What if training stalls below 80 % win-rate?
+Increase exploration noise (entropy coeff × 1.5).
+
+Mix in self-play opponents: 80 % current policy, 10 % random, 10 % older snapshot—prevents over-fitting to the random bot’s quirks.
+
+Lower learning rate by × 0.5: PPO occasionally needs a “fine-tune” phase.
+
+Check reward sign per role: a classic bug is giving both players +1 on the same terminal state.
+
+Checklist for your first milestone
+✓	Milestone
+Transformer forward pass time measured & < 2 µs
+Random policy implemented and frozen
+PPO loop runs ≥ 4 k env-steps / sec on your box
+Win-rate vs. random rises above 60 % by 100 k turns
+Final checkpoint ≥ 80 % win vs. random (95 % CI)
+Random regression test passes after any new feature
+
+Reach those and you’ll be at the same “beat the dummy” layer that NFSP needed before moving on to equilibrium-level self-play 
+arxiv.org
+.
+
+TL;DR
+Expect ≈ 1 M game turns (tens of thousands of complete games) and 1–2 GPU-days to beat a random bot with a 256-d, 6-layer transformer.
+
+Do not stop on a flat PPO loss—stop when evaluation win-rate, entropy, and KL all stabilise.
+
+Keep the random opponent around forever as a regression guard; once you crush it, real learning begins against your own past selves.
+
+
+
+
+
+
+
+
+
+
+
+
+Sources
+You said:
+I heard about natural selection strategy of the bots - to train several bots and then choose best performing. Does that makes sense in this case?
+
+
+ChatGPT said:
+“Natural-selection” training—maintaining a population of agents and letting the fittest survive—works very well for two-player zero-sum games, but there are a few subtle rules you need to follow so you don’t converge to a one-trick pony.
+Below is a concise guide on when and how to employ a population, and how it differs from the single-learner self-play loop you’re already planning.
+
+1 · Why use a population at all?
+Benefit	What it solves in Mafia	Proven precedents
+Diversity / exploration	A single learner often gets stuck in a local optimum (e.g., “always accuse on Day-1”). A population supplies persistent opponents that exploit any weakness, forcing innovation.	AlphaStar’s “league training”, DeepMind PSRO (Policy-Space Response Oracles), OpenAI Five’s frozen-opponent pool.
+Robust evaluation	Elo measured inside a population is more stable than raw win-rate vs. a single checkpoint.	All large competitive-RL projects rank agents by Elo vs. a pool, not just the latest model.
+Hyper-parameter tuning on the fly	Population-Based Training (PBT) mutates LR, entropy coeff, etc., during training—often beats hand tuning.	Applied in AlphaStar and Unity Marines (Jaderberg et al. 2019).
+Safety net against forgetting	Older agents forever punish regression. Your new model can’t stop beating random or it dies out.	DeepNash’s “regularised Nash dynamics” keeps an implicit population via policy regularisation.
+
+2 · Population designs you can choose from
+Scheme	How it works	Pros	Cons / Caveats
+Static opponent pool	Keep K frozen checkpoints (random, early agent, mid agent, etc.). Current learner plays them with equal probability.	Simple; guarantees the agent never forgets old skills.	Pool can get stale; no cross-play between live agents.
+League training (AlphaStar style)	Agents are promoted/demoted by Elo. Roles: main learners, exploiters (train only to beat specific target), random seeds.	Maintains diversity, automatic curriculum.	More infra: matchmaking, Elo, promotion logic.
+PSRO / Fictitious play	Iteratively train a best-response to the mixture of existing agents; add it to the population; recompute mixture.	Converges (in theory) to a Nash equilibrium.	Each iteration can be expensive; mixture computation non-trivial once population ≥ 100.
+Population-Based Training	Do ordinary PPO in many parallel workers; every N steps compare scores, copy weights from better to worse, mutate hyper-params.	Hyper-param search “for free”; naturally keeps multiple strategies alive.	Needs large cluster; mutation schedule needs tuning.
+Evolutionary Strategies (ES)	Treat policy weights as genome; sample noise, pick top-k offspring. Pure black-box evolution.	No gradient dependency; trivially parallel.	Parameter-space ES scales poorly to 10 M-param networks compared with PPO/PG. Harder to combine with value function.
+
+For your first milestone (beat random) a static pool is enough; after that, upgrading to a small league (4–8 concurrent learners + some frozen elders) gives most of the benefits without huge infrastructure.
+
+3 · Practical recipe for a mini-league in your Mafia project
+text
+Copy
+Edit
+players = {
+  Main_A:  learn=True,  sample_prob=0.35
+  Main_B:  learn=True,  sample_prob=0.35
+  Exploit_Mafia: learn=True (plays mafia only, starts from Main_A)
+  Exploit_Red:   learn=True (plays red only, starts from Main_A)
+  Checkpoint_0:  frozen (random)
+  Checkpoint_1:  frozen (first agent that hit 80 % vs. random)
+}
+Matchmaking
+
+Each training game: sample two agents ∝ sample_prob.
+
+If a slot is learning-only-role (e.g., Exploit_Mafia), swap sides if the match would mis-assign roles.
+
+Learning
+
+Main agents update with PPO every batch.
+
+Exploiters train for, say, 50 k steps, then freeze (they become “static exploiters”).
+
+Promotion / replacement
+
+Every 100 k steps compute Elo table.
+
+If Main_A Elo < Main_B − 50, replace A with a fresh clone of B (entropy reset).
+
+If any frozen exploiter becomes easy prey (win-rate < 40 %), retire it.
+
+Hyper-param drift (mini PBT)
+
+When cloning a better model into a worse slot, mutate LR, entropy coeff by × [0.8, 1.2].
+
+This whole loop can live inside Ray RLlib’s Self-Play & PBT utilities with < 200 lines of glue.
+
+4 · When a population can hurt you
+Failure mode	Mitigation
+Loss of gradient signal (“non-stationary opponents”) – learner’s policy gradient variance explodes.	- Use importance weighting (V-trace) or smaller PPO LR.
+- Train against mixture of opponents, not just newest exploiter.
+Strategy cycling / rock-paper-scissors – performance oscillates.	- Keep a diverse pool; choose opponents via priority-fictitious self-play (PFSP): sample those closest to 50 % win-rate so every match is informative.
+Population blow-up – too many checkpoints, slow matchmaking.	- Cap population (e.g., 16). Cull lowest-Elo or merge via knowledge-distillation.
+Compute cost – multiple learners = more GPU hours.	- Learners can share one GPU if your transformer is only 8 M params (batched inference). Opponent inference can run on CPU if latency isn’t critical.
+
+5 · Where it fits in your overall roadmap
+Phase 0: single learner vs. random → reach ≥ 80 % win-rate.
+
+Phase 1: add static pool (random + frozen early checkpoint).
+
+Phase 2: promote small league (2 mains + 2 role-exploiters).
+
+Phase 3: once Elo stagnates, upgrade league size or switch to PSRO style best-response iterations.
+
+Throughout, keep the random bot in the evaluation set as a regression guard.
+
+TL;DR
+A population / natural-selection setup is definitely useful once you move past “beat random” toward high-level, bluff-robust play.
+
+Start tiny: two PPO learners + a couple of frozen checkpoints gives 90 % of the benefit of a full AlphaStar-scale league.
+
+Use Elo or PFSP sampling so every agent trains mostly against opponents that challenge it; retire or mutate weaklings.
+
+Watch out for cycling and gradient variance; tempered sampling and conservative learning rates keep things stable.
+
+Adopt that scaled-down league after you nail the basic milestone, and your Mafia AI will keep inventing stronger, more deceptive tactics instead of plateauing on the first meta it discovers.
+
+
+
+
+
+
+
+
+You said:
+Does this approach guarantee that I will create GTO strategy or some approximation of it?
+
+
+ChatGPT said:
+
+Thought for 13 seconds
+“Will a population-based, self-play transformer guarantee a GTO (game-theory-optimal / Nash-equilibrium) strategy?”
+Short answer	Long answer
+No hard guarantee with a vanilla PPO-plus-population loop.
+Yes, you can drive exploitability arbitrarily low if you switch to an algorithm that carries regret guarantees (CFR, NFSP, PSRO, R-NaD) — but even then the guarantee is asymptotic (in the limit of infinite training and perfect function approximation).	A modern “natural-selection” league (AlphaStar style) is empirically great at producing strong, mixed strategies, yet it is not a mathematically convergent procedure. To move from “strong” to “provably hard to exploit,” you need a regret-minimising backbone or an explicit best-response loop.
+
+Below is what that means in practice, and the concrete steps if you truly need a GTO-level Mafia bot.
+
+1 · Why PPO + population has no theoretical guarantee
+Gradient methods don’t minimise regret.
+PPO optimises the current policy against the current opponent mixture; the environment is non-stationary, so the usual policy-gradient convergence proofs don’t apply.
+
+Deep networks break convexity assumptions.
+Even algorithms that have tabular convergence (e.g. fictitious play) lose that property once you replace tables with transformers.
+
+Population dynamics can cycle.
+Natural selection often produces rock-paper-scissors loops where every new agent exploits the last but is exploitable by an earlier one. Without an extra regulariser (DeepNash’s R-NaD) you can orbit the equilibrium instead of converging.
+
+Hence you get empirical strength, not a Nash proof.
+
+2 · Algorithms that do come with convergence / exploitability bounds
+Algorithm	Sketch	Guarantee (2-player zero-sum)	Notes
+CFR / CFR+	Iteratively update regrets at every infoset.	Average strategy → exact Nash as iterations → ∞ (regret → 0).	Requires traversing the full game tree or an unbiased MCTS sampler; tabular or small-net value storage. 
+poker.cs.ualberta.ca
+NFSP (Neural Fictitious Self-Play)	Learner alternates between best-response Q-learning and average-policy imitation.	Converges to ε-Nash as replay → ∞ in tabular case; empirically small exploitability with function approximation. 
+arxiv.org
+PSRO / PSRO-X / EPSRO	Maintain a population; each iteration train a best-response to the current meta-mix; meta-solver computes new equilibrium weights.	The meta-mix’s exploitability monotonically ↓; converges given enough oracles. 
+arxiv.org
+Regularised Nash Dynamics (DeepNash)	Model-free RL update + uniform-policy regulariser.	Proven to drive exploitability → 0 in large imperfect-info games. Demonstrated on Stratego. 
+deepmind.google
+MC-NFSP, ACFR, discount-CFR	Variants that use MCTS or dynamic discounting for scalability.	Same asymptotic bound; faster empirically. 
+researchgate.net
+
+All rely on some form of no-regret learning ⇒ average strategy becomes unexploitable.
+
+3 · Measuring how close you are to GTO
+Exploitability
+
+Value gap between your policy and a perfect best response.
+
+Exact only if you can compute that best response (feasible for poker abstractions, tough for 10-player Mafia).
+
+Strongest-response bot
+
+Train an exploiter with free access to your logits; if it can’t lift win-rate above 55 %, exploitability is low.
+
+Population meta-Elo
+
+PSRO computes a meta-strategy mix; exploitability ≤ ε if regret per iteration ≤ ε/T.
+
+4 · Practical path to an approximate GTO Mafia bot
+Stage	What to change in your current pipeline
+Start-up	Use your PPO transformer to reach ≥ 80 % vs. random; this initialise useful embeddings.
+Switch core algorithm	Replace PPO loop with NFSP (easy if you’re already in OpenSpiel/RLlib) or PSRO-mini (two best-response learners + meta-solver).
+Add regularisation	If you keep PPO, add DeepNash-style uniform-mix KL term so updates minimise `(win_loss + λ·KL(π
+Exploitability evaluation	Implement a small branch-and-bound search or train a high-entropy exploiter; track its win-rate as a proxy for ε.
+Stop-rule	Stop when exploitability proxy < 1 % (≈ poker-superhuman level) or no longer decreases after two PSRO iterations.
+
+5 · Reality check for large, noisy games
+Exact GTO may be unnecessary.
+In practice, good mixed strategies (DeepNash’s ε ≈ 0.01) are already superhuman and practically unexploitable by any finite opponent pool.
+
+Function approximation limits guarantees.
+The regret proofs assume you can represent any mixed strategy exactly. A 10 M-parameter transformer may still leave blind spots; you must validate with exploiters.
+
+Compute scales as 1/ε².
+Halving exploitability usually quadruples wall-clock. Decide what ε you actually need.
+
+Bottom line
+A natural-selection league driven by PPO does not guarantee convergence to GTO; it merely tends toward strong play.
+
+To get a formal ε-Nash guarantee, pivot to a regret-minimising algorithm such as NFSP, PSRO, or DeepNash’s R-NaD and measure exploitability as training proceeds.
+
+In complex social-deduction games, exact exploitability is intractable; aim for empirical unexploitable behaviour (exploiter win-rate < 55 %) rather than a proof.
+
+Do that, and you’ll have a Mafia agent whose strategy is as close to GTO as anyone can currently verify for such a rich, hidden-information game.
+
+
+
+
+
+
+
+
+
+
+
+
+Sources
+You said:
+Does this approach guarantee that I will create GTO strategy or some approximation of it?
+
+
+ChatGPT said:
+
+Thought for 9 seconds
+Short version
+
+A plain population/“natural-selection” league driven by PPO (or any other gradient-based RL) does not come with a formal guarantee that the final mixture is game-theoretic-optimal (GTO) or even ε-Nash.
+
+If you really need provable convergence toward an equilibrium you must switch—or add a layer—to an algorithm that has no-regret guarantees, e.g. CFR / CFR+, NFSP, PSRO (and its efficient variants), or DeepNash’s regularised-Nash dynamics.
+
+In practice those algorithms, run with a big enough function approximator, can drive exploitability (how much a perfect best-response can gain against you) arbitrarily close to zero, giving you a GTO-level approximation.
+
+1 Why the basic league + PPO isn’t guaranteed
+Policy-gradient methods minimise the current zero-sum payoff, not long-run regret.
+Opponents keep changing, so the theoretical assumptions behind gradient convergence break.
+
+Population dynamics can cycle.
+One agent learns to exploit the last, another exploits that one, etc. without settling.
+
+Deep networks are function approximators.
+Even fictitious-play (which is convergent in tabular form) loses its proof once you replace tables with a transformer.
+
+Result: you usually get a very strong bot empirically, but there is no mathematical upper-bound on its exploitability.
+
+2 Algorithms that do have convergence/ε-Nash guarantees
+Algorithm	Guarantee (2-player zero-sum)	Key papers
+Counterfactual Regret-Minimisation (CFR, CFR+)	Average strategy → exact Nash as iterations → ∞	
+xyzml.medium.com
+Neural Fictitious Self-Play (NFSP)	Converges to ε-Nash in tabular case; in practice gets low exploitability with nets	
+medium.com
+ai.gopubby.com
+Policy-Space Response Oracles (PSRO / EPSRO)	Meta-mix exploitability decreases monotonically; converges given enough best-response iterations	
+arxiv.org
+openreview.net
+Regularised Nash Dynamics (R-NaD, used in DeepNash)	Model-free RL update that provably drives exploitability → 0	
+arxiv.org
+science.org
+
+All of them rely on no-regret learning or explicit best-response computation; their average policy is guaranteed (asymptotically) to become unexploitable.
+
+3 How to move your current pipeline toward a GTO guarantee
+Step	What you change
+Keep your trained transformer as the policy/value backbone—weights transfer.	
+Replace PPO loop with NFSP (easy in OpenSpiel / RLlib) or run a light PSRO:	
+train a best-response for a few thousand games → add it to the meta-pool → recompute mixture.	
+Add uniform-mix regulariser (DeepNash style): extra KL term that nudges each update toward a uniform policy; eliminates strategy cycling.	
+Measure exploitability: either compute it exactly for small abstractions (OpenSpiel has a helper) 
+openspiel.readthedocs.io
+ or train a high-power exploiter and track its win-rate.	
+Iterate until exploitability < desired ε (e.g. < 1 %). Beyond that point you are “GTO-level” for all practical purposes.	
+
+4 Practical expectations
+Guarantees are asymptotic—they hold with infinite training and perfect function approximation. In a big Mafia variant you’ll always stop at some small ε.
+
+Compute cost rises steeply as you push ε down (roughly 1/ε²). Decide what is good enough for your use-case.
+
+Empirical strength often matters more. DeepNash’s exploitability is ≈ 1 % yet it already defeats top human Stratego players 
+science.org
+; you wouldn’t notice the residual gap in normal play.
+
+Bottom line
+Your current “natural-selection” league is great for finding strong, mixed, hard-to-exploit strategies, but it does not guarantee GTO.
+If a provable ε-Nash bound is important, layer in a regret-minimising method such as NFSP, PSRO, or R-NaD and track exploitability as your main metric. That combination will let you push as close to true game-theoretic optimality as your compute and function approximator allow.
+
+
+
+
+
+
+
+
+
+
+
+
+Sources
+You said:
+Does that will help with real world games agains humans? What approach would be best to beat humans based on similar game solving projects?
+
+
+ChatGPT said:
+
+Thought for 10 seconds
+Will “bot-vs-bot” self-play transfer to beating people?
+Yes—if you add two extra ingredients that every successful human-facing game-AI to date has used:
+
+Robust core strategy (≈ GTO) so seasoned humans cannot spot a deterministic weakness.
+
+Human-model layer so the agent exploits systematic human biases and speaks in ways people accept.
+
+Past super-human AIs show the pattern:
+
+Project	What made it crush humans	Transfer lesson
+Libratus (NL-Hold’em, 2017)	Off-line equilibrium solver + real-time sub-game re-solving that adapted to each opponent’s betting quirks.	Start from an ε-Nash core, then online re-solve / fine-tune against observed tendencies. 
+cmu.edu
+pubmed.ncbi.nlm.nih.gov
+DeepNash (Stratego, 2022)	Regularised Nash Dynamics → exploitability ≈ 1 %; randomised play blurred any tell; beat top human experts 84 % of the time.	Model-free equilibrium RL can already outplay humans if the game has little communication. 
+deepmind.google
+science.org
+Cicero (Diplomacy, 2022)	Strong RL strategy + language model fine-tuned on human chat → sounded credible, kept alliances, placed in top 10 % of real players.	Add a language-generation head conditioned on the plan so humans cooperate instead of dog-piling the bot. 
+science.org
+ai.meta.com
+AlphaGo / AlphaZero / OpenAI Five	Population self-play drove to strong mixed strategies; large networks learned moves humans never saw (Move 37) and consistently beat pros.	Diversity league + massive self-play is enough for perfect-information games; still useful here for tactic discovery. 
+wired.com
+openai.com
+
+Recommended pipeline for a human-dominant Mafia AI
+Phase	Purpose	Concrete actions
+1 · Self-play equilibrium core	Become unexploitable.	Continue with NFSP / PSRO or DeepNash-style regularised PPO until exploitability proxy < 2 %.
+2 · Human imitation pre-training	Sound “normal” and pick up folk heuristics that bots miss.	Fine-tune on a corpus of real Mafia transcripts: NLU encoder learns dialogue acts; NLG decoder learns phrasing.
+3 · Hybrid league (bots + scripts + replays)	Inject human-like mistakes and tempo.	Add scripted talkative bots, random delays, mis-click noise. Keeps the equilibrium agent from assuming perfect opponents.
+4 · Opponent-model head	Online exploitation of a specific lobby.	Maintain a lightweight Bayesian or LSTM “human bias” model; blend ε ≈ 0.1 of its best-response into the equilibrium mix during live play. (Libratus’ end-game re-solving analogue.)
+5 · Language & psychology layer	Persuade, bluff, and avoid suspicion.	Intent head → control tokens → 1-3 B-param LLM. Grounding filter ensures messages match strategy. Reward model penalises text that triggers instant votes.
+6 · Safety & stealth	Avoid detection / ensure fair play if needed.	Add entropy floor and style regulariser so outputs vary; throttle APM / turn time to human norms.
+
+Why this works against people
+Humans under-randomise and over-react to social cues.
+A near-GTO core guarantees you never lose to the rare fully optimal human; the opponent-model lets you win bigger when they slip.
+
+Conversation shapes the game.
+Cicero showed that fluent, on-plan language is the difference between a strong engine that gets dog-piled and one that quietly wins alliances.
+
+Population diversity prevents brittle tells.
+By training against many frozen checkpoints (including “chatty” and “quiet” variants) you force the model to keep a hidden-role mix rather than a single pattern humans can read.
+
+Stopping criteria for a “human-ready” release
+Exploitability proxy < 1 % (measured via strongest-response bot).
+
+Win-rate ≥ 70 % in blind tests versus top 1 % human players online.
+
+Human Turing survey: ≥ 60 % of opponents cannot tell they’re facing an AI after five games.
+
+No regression vs. random baseline: still ≥ 95 % win-rate.
+
+Once those are met, your agent will not only survive but thrive in real public Mafia lobbies—matching the trajectory of Libratus, DeepNash, and Cicero in their respective domains.
+
+
+
+
+
+
+
+
+
+
+
+
+Sources
+You said:
+I guess whatever engine I will use to model this game should be fast to make pipeline very fasts what are my options in this domain? If guess this engine would show player public and private information state of the game to our player and ask for next token?
+
+
+ChatGPT said:
+
+Thought for 12 seconds
+Below is a menu of fast-simulation engines + API wrappers that people routinely use in poker, Stratego, Diplomacy and other imperfect-information projects. All of them can expose, at every turn,
+
+makefile
+Copy
+Edit
+obs = {
+    "public_tokens": …,      # everything everyone sees
+    "private_tokens": …,     # role card, night result…
+    "legal_mask": …,         # 0/1 per verb or verb-target pair
+}
+action = agent.act(obs)      # returns (verb_id, target_id)
+next_obs, reward, done, info = env.step(action)
+so the bridge to your transformer/PPO loop is trivial.
+
+1 · OpenSpiel – C++ core, Python bindings
+If you want built-in CFR/NFSP tooling and maximum raw speed.
+
+Why use it	Details
+Extensive-form API: information-state objects, chance nodes, simultaneous or turn-based.	Games are declared once in C++; Python gets a thin wrapper. Zero copy.
+Algorithm zoo: CFR, CFR+, NFSP, PSRO, exploitability evaluators ready-made.	Lets you measure ε-Nash while you iterate.
+Speed: tens–hundreds of thousands of states/ s on a laptop; multi-million on a single core if you vectorise.	Core loops are C++; only the agent’s forward pass hits Python.
+
+→ Write your Mafia rules in C++, compile, then call them from PyTorch. You can still prototype the logic in Python first. 
+github.com
+openspiel.readthedocs.io
+
+2 · EnvPool – C++ batched runner with Gym(d m_env) API
+If raw throughput is king and you’re happy staying in Python for the game code.
+
+Highlights	Notes
+~1 M FPS on Atari, ~3 M FPS on MuJoCo with a single DGX-A100.	Use thread pools + shared memory; no per-step Python GIL.
+You implement the step / reset logic in C++ or Cython, or wrap existing C++ logic with pybind11.	There is a simple template repo.
+Compatible with PettingZoo Parallel API – so RLlib, CleanRL, etc. work out-of-the-box.	
+
+For Mafia you’d put all game-state mutation (vote resolution, seat rotation, etc.) in the C++ side, and let EnvPool hand back your tokenised observation array. 
+arxiv.org
+github.com
+openreview.net
+
+3 · PettingZoo – Pythonic multi-agent front-end
+Great for prototyping and for plugging straight into most MARL libraries.
+
+Pros	Cons
+Clean AEC (agent-environment-cycle) and Parallel APIs.	Pure-Python stepping slows to ~10–30 k FPS unless you vectorise with JAX/Numba.
+Comes with helpers for masking illegal actions, seeding, deterministic tests.	Use EnvPool or JAX backend later when you need >10^5 games/s.
+Huge community (Farama), examples with RLlib, SB3, CleanRL, Warp-Drive.	
+
+Typical workflow: write the first version in PettingZoo → verify PPO beats random → swap the backend for EnvPool. 
+github.com
+pettingzoo.farama.org
+
+4 · JAX-based engines (Jumanji, JaxMARL)
+For single-GPU, fully-compiled pipelines.
+
+Why they’re fast	Relevance to Mafia
+Pure functional envs → XLA fuses the entire game loop and the neural net ↦ one GPU kernel per vector of games.	If you already plan to keep everything in JAX/Flax you can write the Mafia rules as a JAX jit-able function.
+Multi-environment batching is trivial (vmap).	Less out-of-the-box multi-agent infra than PettingZoo, but catching up quickly.
+
+Ideal when you run thousands of parallel games on a single A100/H100 and want NN and env on the same device. 
+github.com
+openreview.net
+
+5 · LiteEFG (2024)
+If you prefer a minimal, modern C++/Python library dedicated only to extensive-form games.
+
+Offers a C++ backend similar in spirit to OpenSpiel but slimmer and focused on scalability; Python users define update graphs that execute in C++. Good choice if you need just CFR/NFSP and nothing else. 
+arxiv.org
+
+Decision checklist
+Question	Recommendation
+Need CFR/NFSP & exploitability metrics day-1?	OpenSpiel (or LiteEFG).
+Need ≥ 1 M env-steps/s with minimal C++ effort?	Wrap your C++ Mafia core in EnvPool.
+Want the simplest Python prototype first?	PettingZoo AEC API, then port to EnvPool.
+All code already in JAX?	Jumanji/JaxMARL-style functional env.
+
+Minimal skeleton (PettingZoo → EnvPool upgrade path)
+python
+Copy
+Edit
+# 1. PROTOTYPE (PettingZoo AEC)
+from pettingzoo import AECEnv
+
+class MafiaEnv(AECEnv):
+    def __init__(self, n_players=10):
+        super().__init__()
+        self.observation_spaces = {...}
+        self.action_spaces       = {...}
+
+    def step(self, action):
+        # mutate C++ or Python game state
+        ...
+
+    def observe(self, agent):
+        return {
+            "public_tokens": ...,
+            "private_tokens": ...,
+            "legal_mask": ...,
+        }
+
+# 2. SPEED-UP (EnvPool)
+#   Re-implement the step/reset in C++, expose pybind11 class MafiaGame,
+#   then register:
+import envpool
+env = envpool.make_gymnasium("MafiaGameEnv", num_envs=1024, batch_size=1024)
+obs, info = env.reset()      # obs["public"], obs["private"], mask
+This lets you reach hundreds of thousands of complete Mafia games per second on one 32-core workstation, more on a cluster, while keeping the same agent code.
+
+Take-aways
+Yes – the engine just needs to output public/private token arrays and a legal-action mask; every library above supports that.
+
+Prototype fast, then compile: start in PettingZoo, graduate to EnvPool/OpenSpiel once the logic is nailed down.
+
+If equilibrium proofs matter (CFR/NFSP), pick OpenSpiel or LiteEFG; they’re designed for extensive-form games and already benchmarked for speed.
+
+With any of these choices you can feed millions of turns per hour to your transformer league—exactly what made AlphaGo, Libratus and DeepNash possible.
+
+
+
+
+
+
+
+
+
+
+
+
+Sources
+You said:
+Can you provide me a high level roadmap for this project with clear defined definition of done for each step and approximate complexity?
+
+
+ChatGPT said:
+
+Thought for a few seconds
+Below is a phase-by-phase roadmap that teams at DeepMind, OpenAI or FAIR would recognise—a blend of the “beat-random first” curriculum, league training, and an optional equilibrium layer.
+Complexity is rated on a 1-to-5 scale (≈ person-weeks of work for an experienced engineer/researcher who already knows PyTorch/Python). Compute refers to modern commodity gear—one A100 means a single 80 GB GPU; “>1 GPU” assumes a small cluster.
+
+#	Phase (≈ order)	Key Outputs & Definition of Done	Complexity	Main Compute Need
+0	Scope & rules freeze	• One-pager with exact 10-seat Mafia rules (turn order, victory conditions).
+• List of legal verbs and verb-arguments.
+✓ Stakeholders sign-off.	1	none
+1	Game engine—Python prototype (PettingZoo AEC)	• MafiaEnv class returning {public_tokens, private_tokens, legal_mask}.
+• 5k random games simulate < 30 s on laptop.
+✓ Unit tests: legal-move masking, deterministic seeding.	2	CPU
+2	Token grammar & masking	• YAML/JSON spec of ≤ 40 verb tokens + 10 player-ID tokens.
+• Encoder/decoder utils round-trip a sample turn.
+✓ Fuzzer shows 0 invalid tokens in 10k random turns.	1	none
+3	Baseline random & scripted bots	• RandomAgent, AlwaysAccuseDay2Agent, AlwaysClaimSheriff scripts.
+• CLI to run bot-vs-bot, dump CSV of results.
+✓ Random vs. random → ≈ 50 % win each role over 10k games.	1	CPU
+4	Metrics harness	• evaluate(policy, opponent_pool) ⇒ win-rate, ELO, exploitability stub.
+• GitHub Actions smoke test: PPO agent ≥ 60 % vs. random after 10k games.
+✓ Pass/fail badge on repo.	1	CPU
+5	PPO baseline (single learner)	• 6-layer, 256-dim transformer policy+value.
+• Beats random ≥ 80 % both roles on 50k eval games.
+✓ Training wall-clock < 48 h on 1 GPU.	3	1 GPU + 32 CPU envs
+6	Fast engine (EnvPool or OpenSpiel C++)	• C++ step/reset; ≥ 200 k env-steps/s on dev box.
+• Python wrapper identical API to Phase 1.
+✓ Regression suite still passes.	3	CPU
+7	Pre-training on random buffer (optional)	• Self-supervised checkpoint with losses < baseline, value head MSE < 0.2.
+✓ Fine-tuned PPO reaches Phase 5 metric 2× faster.	2	1 GPU
+8	Historical-opponent pool	• Training loop samples: 70 % latest agent, 20 % random, 10 % frozen v1.
+• Win-rate vs. pool ≥ 70 %; no regression vs. random.
+✓ CI test ensures future commits keep ≥ 65 %.	2	1 GPU
+9	Mini-league (natural selection)	• 4 concurrent learners + exploiters; PFSP matchmaking.
+• Elo curve plateaus > 1200 vs. pool.
+✓ Diversity metric (policy KL between learners) > 0.3.	3	≥ 2 GPUs
+10	Equilibrium layer (NFSP or PSRO-mini)	• Average-strategy network stored every 1 M steps.
+• Exploitability proxy < 2 % (exploiter win-rate < 52 %).
+✓ Paper-ready plot: exploitability ↓ w/ iterations.	4	2 GPUs + 64 CPUs
+11	Language ingestion (NLU)	• Sentence-encoder (small BERT) classifies dialogue-acts with ≥ 90 % F1 on 2 k labelled lines.
+• Parsed tokens feed strategic core; no drop in Phase 10 metrics.	2	1 GPU (fine-tune)
+12	Intent head + NLG wrapper	• Policy outputs discrete intent.
+• 1–3 B LLM (e.g. Mistral-7B) generates surface text; grounding checker passes 99 %.
+✓ Human blind test: 60 % can’t tell AI after 3 games.	4	1-2 GPUs for inference (can be CPU if latency OK)
+13	Human-model / on-line exploitation	• Lightweight LSTM or Bayesian filter updates per opponent.
+• Live lobby test: +5 % win-rate boost vs. random human sample, no exploitability regression.	3	1 GPU
+14	Safety & deployment	• Rate limiter, style filter, ToS compliance.
+• Docker image < 2 GB, serves at < 100 ms per move.
+✓ Passes red-team review, latency SLA.	2	Prod CPU + 1 inference GPU
+15	Public benchmark & paper	• Release env + baseline checkpoints + training logs.
+• ArXiv pre-print incl. exploitability, human-study stats.
+✓ GitHub stars > 100, reproducibility badge.	1	n/a
+
+Complexity key
+1 = ≤ 1 engineer-week • 5 = multi-person-month / specialised research
+
+Suggested execution timeline (single 3-person team, 1 GPU box + small CPU cluster)
+pgsql
+Copy
+Edit
+Months 0-1  : Phases 0-5          (prototype & beat random)
+Months 2-3  : Phases 6-9          (fast env + league)
+Months 4-5  : Phase 10            (equilibrium / exploitability)
+Months 6-7  : Phases 11-13        (language & human exploitation)
+Month  8    : Phases 14-15        (hardening, benchmark, publication)
+Check-pointed “Definition of Success”
+Milestone	Success metric
+Beat-random	≥ 80 % win-rate vs. random bot, both roles.
+Robust-league	≥ 70 % win vs. diverse pool; no single exploiter gains > 55 %.
+Near-GTO	Exploitability proxy < 2 %.
+Human-dominant	≥ 70 % win in blind on-line matches vs. top-quartile human players.
+Production-ready	< 100 ms move latency; passes style/safety filters.
+
+Hit each “Definition of Done” before advancing to the next phase and you’ll de-risk the project step-by-step—while always having a working agent stronger than the last one.
+
+
+
+
+
+
+
+
+You said:
+How system will deal with improper tokens? For example if we will have token <nightphase> and player is a sheriff we will expect player can only reply with <sheriffcheck><x> (where x is a player number). But random agent can answer with any token, how we can prevent it? I guess we should allow random agent to be not really random but randomly select from allowed tokens, right? But for our player agent - what it will accidentally respond with incorrect action how server should react?
+
+
+ChatGPT said:
+Design rule #1
+The environment—not the agent—decides what counts as a legal move.
+Therefore every turn it must hand back (a) the observation and (b) a mask of legal actions.
+With that in place the problem reduces to three cases:
+
+Case	Who sent an illegal token?	What should happen?	Why
+A (scripted “random” bot)	You control the code → never generate illegal moves in the first place.	Pick uniformly from the masked set.	Keeps baseline meaningful.
+B (your trained agent, during training)	The policy could emit an index that is masked out.	1. Hard-mask before sampling so probability = 0.
+2. If you turn off masking (debug mode), treat the move as “auto-forfeit” and give –1 reward.	Masking is simpler & gives a smooth gradient: the logits of impossible actions are set to –∞, so the soft-max probability really is zero and the agent never samples them.
+C (malicious or buggy client in production)	You must defend the server.	Reject the packet, send “illegal move” error; optionally auto-kill player or replace with no-op.	Security / fairness.
+
+1 · Action-mask protocol (training & inference)
+python
+Copy
+Edit
+obs = {
+    "public_tokens": [...],
+    "private_tokens": [...],
+    "legal_mask": np.array(  # shape (num_verbs, num_targets)
+        [[1,1,0,0,0,0,0,0,0,0],   # VERB = ACCUSE  -> only players 0,1 legal
+         [1,1,1,1,1,1,1,1,1,1],   # VERB = SAY_RED -> any target
+         [0,0,0,0,0,0,0,0,0,0],   # VERB = SHERIFF_CHECK (day) -> illegal
+         [1,0,0,0,0,0,0,0,0,0],   # VERB = SHERIFF_CHECK (night) -> only once, only target 0
+         ...])
+}
+logits_verb, logits_target = policy(obs)       # two tensors
+logits_verb[illegal_verbs]   = -1e9            # vector mask
+logits_target += log_target_mask               # broadcast -1e9 where 0
+verb   = Categorical(logits=logits_verb).sample()
+target = Categorical(logits=logits_target[verb]).sample()
+Key point: mask before the soft-max; the gradients that flow into the transformer skip those positions, so the network learns nothing about impossible moves and can’t accidentally prefer them.
+
+2 · Random-bot fix
+python
+Copy
+Edit
+verb = np.random.choice(np.where(legal_mask.sum(1) > 0)[0])
+target = np.random.choice(np.where(legal_mask[verb])[0])
+That bot stays random within the rules, never crashes the env, and still provides the stochastic baseline you need.
+
+3 · What if the policy is forced to pick from an empty set?
+Happens only if every verb is masked (bug or end-game turn):
+
+Training – return done=True and reward according to loss condition (e.g. –1 for rule breach).
+
+Production – treat as pass or no-op and continue; optionally log for debugging.
+
+But a well-formed rule set rarely masks every action: you always include “<NO_OP>/<PASS>”.
+
+4 · Debug/penalty mode (optional)
+For extra safety you can compile the engine with a flag:
+
+cpp
+Copy
+Edit
+if (!legal_mask[verb][target]) {
+    if (STRICT_MODE)
+        return early_termination(-1.0);        // autolose
+    else {
+        verb = PASS;                           // forgive, no-op
+    }
+}
+Use STRICT_MODE during unit tests to catch bugs; switch to forgiving mode when you run large experiments if you don’t want training to explode on a rare corner case.
+
+5 · Summary “Definition of Done” for action validity
+Env unit test: for 10 k random game states, legal_mask.sum() > 0 always.
+
+Random bot: 100 k games without a single illegal-move exception.
+
+Policy forward pass: after masking, softmax(logits).sum() == 1.0 (no NaNs).
+
+Strict mode fuzz test: force invalid action; env returns done and –1 reward.
+
+CI: regression suite fails if any commit re-introduces an unmasked impossible verb.
+
+Follow that pattern and all agents—random, learned, or malicious—either (a) pick only legal tokens or (b) get an immediate, well-defined penalty, keeping your training loop stable and your production server safe.
+
+
+
+
+
+
+
+
+You said:
+Masking is a great because I will not waste time on refills when agent accidentally chose invalid action ?
+
+
+ChatGPT said:
+Exactly — masking invalid actions saves both compute and learning signal:
+
+Benefit of masking	Why it matters in practice
+Zero wasted steps	The agent never “burns” a turn on an illegal command, so you don’t have to rewind or terminate the episode. Every simulated step contributes useful experience.
+Stable gradients	Log-probabilities of masked moves are set to –∞ before the soft-max, so the policy’s probability mass is renormalised over only the valid actions. The backward pass never sees NaNs or huge loss spikes.
+Faster exploration	Because the network isn’t trying to assign credit to impossible actions, it converges to meaningful strategies sooner (empirically 1.5–2 × fewer PPO updates in card-game benchmarks).
+Lower variance	No random “early forfeits” that inject high-variance –1 rewards; value-function targets stay on a consistent scale, reducing critic noise.
+Simple random bots	A uniform-random baseline is still valid—just sample from the mask. You get stochastic opponents without debugging crashes.
+
+Implementation tip
+If you represent your policy as two heads ( verb_logits and target_logits ):
+
+python
+Copy
+Edit
+verb_logits[~legal_verbs] = -1e9
+target_logits += (legal_target_mask - 1) * 1e9   # broadcast row-wise
+Do this inside the model’s forward method (or just before you construct the Categorical) so every call—training, evaluation, production—benefits from the safeguard.
+
+Bottom line: masking illegal tokens means no time lost on rollbacks, no garbage gradients, and a smoother learning curve from day one.
+
+
+
+
+
+
+
+
+You said:
+So is it possible that my agent could learn some unorthodox strategies such as bluffing being sheriff being citizen ordinary player or when mafia shot itself in some scenarios to pretend to be a red player ?
+
+
+ChatGPT said:
+
+Thought for 11 seconds
+Yes — if the move is legal and occasionally helpful, self-play will discover it
+Modern self-play systems routinely invent tactics that no human programmed:
+
+Game & AI	Emergent “unorthodox” move	How it appeared
+Go / AlphaGo	The famous Move 37 shoulder-hit that pros rated “one-in-10 000” before seeing it.	Pure self-play after supervised bootstrap; policy/value net found a line that wins more often, even though humans never use it. 
+wired.com
+Poker / Libratus	Multi-street “polarised” bluffs that squeezed pros in spots humans thought un-bluff-able.	Equilibrium solver + live best-response re-solving adapted to each opponent. 
+cmu.edu
+Stratego / DeepNash	Intentionally sacrificing high-rank pieces to lure an opponent into a bomb and hiding the flag in the open.	Regularised Nash Dynamics forced a mixed strategy, so the bot learned deceptive sacrifices. 
+deepmind.google
+
+If you expose “fake-sheriff claim” or “self-shoot as mafia” as legal verb tokens in your Mafia environment, exactly the same pressure will drive their discovery:
+
+Exploration noise (entropy bonus, ε-greedy, population diversity) occasionally plays the odd move.
+
+Credit assignment: if the manoeuvre ever raises expected win-rate—even 0.2 %—policy gradients make it slightly more likely next time.
+
+Opponent adaptation: once the trick shows a payoff, other agents learn counters; the league converges on a mixed equilibrium that sometimes bluffs, sometimes doesn’t.
+
+Regularisation (e.g. R-NaD or entropy floor) keeps the strategy stochastic, so no deterministic “tell” remains.
+
+With enough games, a mid-sized transformer easily remembers when the bluff works:
+– Citizen can feign sheriff only after real sheriff is likely dead;
+– Mafia suicide makes sense when two remaining mafias guarantee majority voting tomorrow, etc.
+
+Make sure the environment allows it — then stand back
+Checklist to enable emergent bluffs	Why it matters
+Legal-action mask includes <CLAIM_SHERIFF> even for citizens, and <SELF_SHOOT> for mafia during night.	If it’s masked out, the agent can never try it.
+Sparse but truthful reward: final ±1 only (or a tiny shaping bonus for winning faster).	Prevents hand-crafted shaping from dis-incentivising risky plays.
+Entropy coefficient stays >0 for many updates	Guarantees every legal action is sampled occasionally.
+Diverse opponent pool / league	New bluff is punished, refined, then kept at equilibrium frequency.
+State encoding shows prerequisites (day count, remaining mafias, prior claims).	Agent needs those tokens to learn “when” the bluff is good.
+
+What if the bot still never bluffs?
+Exploration too low → raise entropy or inject an “explorer” agent that picks rare verbs 10 % of the time.
+
+Reward signal drowned → add a very small auxiliary reward (e.g. +0.05 if the bluff is followed by a win) for a few training epochs, then anneal to zero.
+
+Observation missing → ensure citizen can distinguish “I already claimed sheriff this day” via a phase/history token.
+
+After those tweaks the system will typically find all legal, sometimes-profitable deceptions—exactly the way AlphaGo, Libratus and DeepNash did in their domains.
+
+
+
+
+
+
+
+
+
+
+
+
+Sources

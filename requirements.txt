@@ -5,6 +5,8 @@ arrow>=1.3.0
 asttokens>=2.4.1
 async-lru>=2.0.4
 attrs>=23.2.0
+boto3
+langchain_anthropic
 Babel>=2.14.0
 beautifulsoup4>=4.12.2
 bleach>=6.1.0

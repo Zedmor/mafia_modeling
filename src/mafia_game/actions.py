@@ -204,6 +204,17 @@ class PublicSheriffDeclarationAction(Action):
         ] = self.role.value
 
     @classmethod
+    def generate_action_mask(cls, game_state: "CompleteGameState", player_index):
+        # Can claim sheriff checks about any alive player except self
+        mask = torch.zeros(cls.action_size, dtype=torch.float32)
+        for i, player_state in enumerate(game_state.game_states):
+            if player_state.alive and i != player_index:
+                # Allow both RED and BLACK declarations for this player
+                mask[i * 2] = 1      # RED declaration  
+                mask[i * 2 + 1] = 1  # BLACK declaration
+        return mask
+
+    @classmethod
     def from_index(cls, action_index, game_state, player_index):
         # Determine the target player based on the action_index
         target_player = action_index // 2  # Integer division to get the player index
@@ -236,6 +247,7 @@ class VoteAction(Action, FromIndexTargetPlayerMixin):
         # This mask is different, votes are disabled by default
         # and only voting for nominated players is allowed
         mask = torch.zeros(cls.action_size, dtype=torch.float32)
+        
         if game_state.voting_round == 0:
             # First round: vote for nominated players
             for index in game_state.nominated_players:
@@ -244,6 +256,7 @@ class VoteAction(Action, FromIndexTargetPlayerMixin):
             # Second round: vote for tied players
             for index in game_state.tied_players:
                 mask[index] = 1
+        
         return mask
 
     def __repr__(self):
@@ -274,3 +287,40 @@ class EliminateAllNominatedVoteAction(Action):
 
     def __repr__(self):
         return f"Player {self.player_index}. Votes {'to eliminate' if self.eliminate_all else 'not to eliminate'} all tied players"
+
+
+class SayAction(Action):
+    action_size = 20  # 10 players × 2 colors
+
+    def __init__(self, player_index, target_player: int, team: Team):
+        self.player_index = player_index
+        self.target_player = target_player
+        self.team = team
+
+    def apply(self, game_state: "CompleteGameState"):
+        # Record the player's declaration about another player's team
+        # For now, we'll store this in a similar way to public sheriff checks
+        # This represents a public statement about a player's team affiliation
+        game_state.log(self.__repr__(), log_type=LogType.OTHER)
+
+    @classmethod
+    def generate_action_mask(cls, game_state: "CompleteGameState", player_index):
+        # Can declare about any alive player except self
+        mask = torch.zeros(cls.action_size, dtype=torch.float32)
+        for i, player_state in enumerate(game_state.game_states):
+            if player_state.alive and i != player_index:
+                # Allow both RED and BLACK declarations for this player
+                mask[i * 2] = 1      # RED declaration  
+                mask[i * 2 + 1] = 1  # BLACK declaration
+        return mask
+
+    @classmethod
+    def from_index(cls, action_index, game_state, player_index):
+        # Determine the target player and team based on the action_index
+        target_player = action_index // 2  # Integer division to get the player index
+        team = Team.RED_TEAM if action_index % 2 == 0 else Team.BLACK_TEAM
+        return cls(player_index, target_player, team)
+
+    def __repr__(self):
+        team_name = "innocent" if self.team == Team.RED_TEAM else "mafia"
+        return f"Player {self.player_index} declares Player {self.target_player} is {team_name}"

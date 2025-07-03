@@ -1,0 +1,31 @@
+# Task ID: 3
+# Title: Create Token-Based Baseline Agents
+# Status: pending
+# Dependencies: 2
+# Priority: medium
+# Description: Implement random and scripted agents that work with the TokenMafiaEnv interface for benchmarking and initial training opponents
+# Details:
+Create RandomTokenAgent (uniform sampling from legal actions), AlwaysNominateDay2Agent, AlwaysClaimSheriffAgent, and basic heuristic agents. All must work with token observations and produce token actions.
+
+# Test Strategy:
+Agent behavior validation, win rate measurement between different agents, token interface compatibility
+
+# Subtasks:
+## 1. Implement RandomTokenAgent [pending]
+### Dependencies: None
+### Description: Create agent that samples uniformly from legal token actions
+### Details:
+
+
+## 2. Create Scripted Strategy Agents [pending]
+### Dependencies: None
+### Description: Build AlwaysNominateDay2Agent, AlwaysClaimSheriffAgent with token actions
+### Details:
+
+
+## 3. Implement Basic Heuristic Agents [pending]
+### Dependencies: None
+### Description: Create SimpleMafiaAgent and SimpleTownAgent with token-based strategies
+### Details:
+
+

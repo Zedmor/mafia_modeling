@@ -7,7 +7,7 @@ Game is played with 10 players, players are getting roles at random.
 At the beginning of the game there's 3 players who gets Black cards (1 Don and 2 Mafia) and 7 players get Red cards
 (6 Citizen card and 1 Sheriff card).
 
-One team is playing against each other.
+One team is playing against each other. So we can present it as one player (red) playing against another player (black) where red player do not know who are red players are and black player knows who are black players.
 
 Three black players knows each other and red players do not know who is red and who is black.
 
@@ -18,12 +18,8 @@ During day phase first acting player may make one of the following moves:
 1. Put any alive player to the elimination vote.
 2. Declare that player is a sheriff and checked other players at night
 (number of checks could not be more that nights spent since sheriff checks at night).
-3. Provide it's "Opinion" vector - i.e. if he consider other players as "red" or "black" players. I will propose vector representation of this such as vector with len of 10 (for each player) where it will have values from -2 to +2, so 0 will be "no opinion" and opinion about itself would be null and for other players it would be categorized as such:
--2 - def black player
--1 - probably black player
-0 - no opinion
-+1 - probably red player
-+2 - def red player
+3. Declare any number of suspicious/friendly moves i.e.
+<suspect><1><like><6><suspect><8><end_of_move>
 
 Then next alive player make a move, with active player moving in clockwise direction.
 
@@ -64,19 +60,3 @@ Here's explanation on how game composition might look like by turns:
     On 5th turn there's only 1 mafia could be present in the game. If more than 2 mafia were present then victory condition for mafia been triggerd on the 4 turn night if no mafia present in the game then red players won.
 
 
-Some consideration on data structures and game state representation:
-
-1. We should have have vector of turns (we may use 10 moves as max amount of moves, in reality when mafia shoots every night and when there's vote every day there's maximum 5 moves available but we can safeguard us to have array of 10 turns)
-2. Each turn should have moves for each player:
-2.1. His declaration vector
-2.2. His nomination vector (if he nominates anyone).
-2.3. His voting vector (when he votes for someone elimination)
-2.4. For black players shooting vector (who they shoot during night)
-2.5. For sheriff check vector (who he decides to check and result of that check (1 - mafia, 0 - non mafia)
-2.6. For Don check vector (who he decides to check for being sheriff and result of that check (1 - sheriff, 0 - non sheriff)
-
-I want to use MCST (monte carlo tree search) for modeling this game. Please advice if this is a good method to model this game and what I need to conisder in modeling. My goal is to calculate game theory optimal strategy for red and black players, such as deviation of that strategy would hurt their winrate.
-
-Please advice me with architecture for that.
-
-I want to create MCST algorithm for it to find most optimal strategy for both teams. What should I consider doing that?

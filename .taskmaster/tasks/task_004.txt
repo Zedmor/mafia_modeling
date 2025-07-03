@@ -1,0 +1,31 @@
+# Task ID: 4
+# Title: Build Evaluation and Metrics System
+# Status: pending
+# Dependencies: 3
+# Priority: medium
+# Description: Create comprehensive evaluation framework for measuring agent performance using token interface
+# Details:
+Build CLI evaluation tools, win rate measurement by role, performance benchmarking, exploitability proxy estimation, and training progress tracking. Must work with TokenMafiaEnv and support transformer agents.
+
+# Test Strategy:
+Evaluation accuracy validation, statistical significance testing, performance measurement accuracy
+
+# Subtasks:
+## 1. Build Tournament Evaluation System [pending]
+### Dependencies: None
+### Description: Create CLI tool for running agent vs agent tournaments with statistical analysis
+### Details:
+
+
+## 2. Implement Performance Benchmarking [pending]
+### Dependencies: None
+### Description: Add token encoding/decoding speed and game simulation throughput measurement
+### Details:
+
+
+## 3. Create Training Progress Dashboard [pending]
+### Dependencies: None
+### Description: Build visualization and tracking for transformer training metrics
+### Details:
+
+

@@ -15,7 +15,9 @@ logging.getLogger("botocore.credentials").setLevel(logging.WARNING)
 # Configure the LLM logger that will log to file.log
 llm_logger = logging.getLogger('llm_interactions')
 llm_logger.setLevel(logging.INFO)
-llm_file_handler = logging.FileHandler('/home/ANT.AMAZON.COM/zedmor/PycharmProjects/mafia_modeling/src/mafia_game/file.log')
+# Create log file in the same directory as this script
+log_file_path = os.path.join(os.path.dirname(__file__), 'file.log')
+llm_file_handler = logging.FileHandler(log_file_path)
 llm_file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 llm_logger.addHandler(llm_file_handler)
 llm_logger.propagate = False  # Prevent logs from being sent to the console
@@ -137,8 +139,16 @@ class LoggingLLM:
 # Use the logging wrapper
 llm = LoggingLLM(original_llm)
 
-with open('/home/ANT.AMAZON.COM/zedmor/PycharmProjects/mafia_modeling/docs/book.txt') as book_file:
-    book = book_file.readlines()
+# Try to read the book file, but handle the case where it doesn't exist
+try:
+    # Get the project root directory (two levels up from this file)
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    book_path = os.path.join(project_root, 'docs', 'book.txt')
+    with open(book_path) as book_file:
+        book = book_file.readlines()
+except FileNotFoundError:
+    # If book.txt doesn't exist, use empty book content
+    book = ["Book content not available for this game session."]
 
 def create_messages(params, response_type):
     content = []

@@ -1,0 +1,31 @@
+# Task ID: 10
+# Title: Implement Nash Equilibrium Finding (NFSP/PSRO)
+# Status: pending
+# Dependencies: 9
+# Priority: high
+# Description: Add equilibrium-finding capabilities using NFSP or PSRO to minimize exploitability below 2% threshold
+# Details:
+Implement exploitability estimation using high-entropy DQN exploiter training. If exploiter achieves >52% win rate, trigger NFSP/PSRO iteration. Target final exploitability < 2% for near-GTO play.
+
+# Test Strategy:
+Exploitability measurement accuracy, equilibrium convergence validation, robustness testing against various strategies
+
+# Subtasks:
+## 1. Implement Exploitability Estimation [pending]
+### Dependencies: None
+### Description: Create high-entropy DQN exploiter for measuring policy exploitability
+### Details:
+
+
+## 2. Add NFSP/PSRO Algorithm [pending]
+### Dependencies: 10.1
+### Description: Implement Neural Fictitious Self-Play or Policy Space Response Oracles for equilibrium finding
+### Details:
+
+
+## 3. Validate GTO Performance [pending]
+### Dependencies: 10.2
+### Description: Achieve and validate exploitability < 2% threshold with robustness testing
+### Details:
+
+

@@ -1,0 +1,43 @@
+# Task ID: 7
+# Title: Port Token Wrapper to C++ with EnvPool
+# Status: pending
+# Dependencies: 2, 6
+# Priority: medium
+# Description: Migrate the working Python TokenMafiaEnv to C++ using EnvPool for massive performance gains (target: 200k+ env-steps/s)
+# Details:
+Port successful Python token wrapper to C++ while maintaining identical API. Use EnvPool's thread pool architecture for vectorization. Preserve exact token generation and legal masking behavior. Create Python bindings with same interface as Python version.
+
+# Test Strategy:
+Performance benchmarks (200k+ steps/s), API compatibility validation, output equivalence testing, memory leak detection
+
+# Subtasks:
+## 1. Analyze Python Implementation [pending]
+### Dependencies: None
+### Description: Study working Python TokenMafiaEnv to understand exact behavior and API requirements
+### Details:
+
+
+## 2. Design C++ Architecture [pending]
+### Dependencies: 7.1
+### Description: Plan C++ implementation with EnvPool integration while maintaining API compatibility
+### Details:
+
+
+## 3. Implement C++ Core Logic [pending]
+### Dependencies: 7.2
+### Description: Port game logic and token generation to C++ with efficient data structures
+### Details:
+
+
+## 4. Create EnvPool Integration [pending]
+### Dependencies: 7.3
+### Description: Integrate with EnvPool's vectorization framework for parallel execution
+### Details:
+
+
+## 5. Build Python Bindings [pending]
+### Dependencies: 7.4
+### Description: Create Python bindings that expose identical API to original Python implementation
+### Details:
+
+

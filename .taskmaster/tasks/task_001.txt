@@ -1,0 +1,221 @@
+# Task ID: 1
+# Title: Complete Token Grammar and Encoding System
+# Status: done
+# Dependencies: None
+# Priority: high
+# Description: Finalize the 50-token vocabulary system and implement encoding/decoding utilities to bridge existing Action classes with transformer-compatible tokens
+# Details:
+Complete the token grammar specification started in subtask 1.1. Implement bidirectional conversion between existing Action classes (NominationAction, VoteAction, etc.) and the 50-token vocabulary. Ensure legal_mask never becomes all-zero by including <END_TURN> as always-legal fallback. Create comprehensive documentation and validation tests.
+
+# Test Strategy:
+Unit tests for token encoding/decoding, validation that all current Action classes can be represented as tokens, verification that legal_mask always contains at least one valid action, and integration tests with existing game engine
+
+# Subtasks:
+## 1. Fix Phase Detection Logic for Voting and Revoting [pending]
+### Dependencies: None
+### Description: Correct the phase detection logic that incorrectly emits REVOTE_PHASE tokens during initial voting phases
+### Details:
+Bug: Game incorrectly shows <YOUR_TURN> <REVOTE_PHASE> <PLAYER_0> during initial vote phase instead of proper voting phase markers.
+
+Root Cause: In token_game_interface.py, the revote phase detection logic in apply_action() incorrectly triggers when active_player resets to 0, even during initial voting setup.
+
+Implementation:
+1. Fix _is_voting_phase() and _is_revote_phase() detection methods
+2. Add proper tracking of voting round number to distinguish initial vs revote rounds
+3. Update revote phase transition logic in apply_action() method
+4. Ensure REVOTE_PHASE token only emitted after completed voting rounds with ties
+5. Add voting round state tracking to TokenGameState
+
+Files to modify:
+- src/mafia_transformer/token_game_interface.py (apply_action method, line ~1000-1200)
+- src/mafia_transformer/token_vocab.py (if new tokens needed)
+- src/mafia_transformer/token_game_server.py (phase detection helpers)
+
+## 2. Implement Vote Revelation and Revote Phase Tokens [pending]
+### Dependencies: 1.1
+### Description: Add proper vote revelation after voting rounds complete and ensure revote phase tokens are properly emitted
+### Details:
+Bug: Players do not see other player votes after vote phase is done and we do not see revote_phase token properly.
+
+Root Cause: In token_game_interface.py, vote revelation is disabled with 'should_reveal_votes = False' and the vote revelation mechanism is not properly implemented.
+
+Implementation:
+1. Enable vote revelation mechanism in apply_action() method
+2. Fix _should_show_vote_revelation_now() and _get_vote_revelation_tokens() methods
+3. Implement proper vote extraction from game engine after voting rounds complete
+4. Add vote revelation tokens to all players' sequences when voting round completes with tie
+5. Ensure REVOTE_PHASE tokens are emitted at the right time
+6. Test vote privacy during voting vs revelation after round completion
+
+Files to modify:
+- src/mafia_transformer/token_game_interface.py (apply_action method, lines 700-900)
+- src/mafia_transformer/token_game_interface.py (_should_show_vote_revelation_now, _get_vote_revelation_tokens)
+- Add comprehensive vote revelation tests
+
+Specific fixes:
+- Change should_reveal_votes = False to proper logic
+- Fix _get_all_votes_from_completed_round() to extract votes from game engine
+- Add vote revelation to get_observation_tokens() when appropriate
+
+## 3. Fix Missing END_TURN Tokens After Actions [pending]
+### Dependencies: None
+### Description: Ensure all night phase moves and vote moves properly end with END_TURN tokens
+### Details:
+Bug: Night phase moves and vote moves do not end with <END_TURN> tokens, leading to incomplete action sequences.
+
+Root Cause: In token_game_interface.py, the apply_action() method has inconsistent END_TURN handling between different action types. Some actions (especially night actions) don't properly append END_TURN.
+
+Implementation:
+1. Review all action types in apply_action() method to ensure consistent END_TURN handling
+2. Fix night actions (KILL, SHERIFF_CHECK, DON_CHECK) to always end with END_TURN
+3. Fix vote actions to properly end with END_TURN
+4. Ensure multi-action day sequences properly handle END_TURN
+5. Add validation that all action sequences end with END_TURN where required
+6. Update _is_private_action() logic to ensure END_TURN is added for night actions
+
+Files to modify:
+- src/mafia_transformer/token_game_interface.py (apply_action method, private action handling)
+- src/mafia_transformer/token_game_interface.py (_is_private_action, night action handling)
+- Add tests to verify all action types end with END_TURN
+
+Specific fixes:
+- Line ~800-900 in apply_action: fix night action END_TURN logic
+- Line ~750-800 in apply_action: fix vote action END_TURN logic
+- Ensure consistency between has_end_turn detection and action processing
+
+## 4. Fix Duplicate Kill Action Sequences [pending]
+### Dependencies: 1.3
+### Description: Eliminate duplicate kill action tokens appearing in the sequence
+### Details:
+Bug: Duplicate kill actions in the log: TOKENS: <KILL> <PLAYER_0> <END_TURN> <PLAYER_0> <KILLED> <PLAYER_0> <KILL> <PLAYER_0> <END_TURN> <PLAYER_0> <YOUR_TURN>
+
+Root Cause: In token_game_interface.py, the apply_action() method has redundant token generation for KILL actions - both in private action handling and public result handling, causing the same action to be recorded twice.
+
+Implementation:
+1. Review KILL action handling in apply_action() method
+2. Eliminate redundant token generation in private vs public action sections
+3. Ensure KILL actions are only recorded once per player sequence
+4. Fix the logic that handles both the action and its result (KILLED token)
+5. Clean up the sequence generation to avoid duplication
+6. Ensure proper separation between action execution and result broadcasting
+
+Files to modify:
+- src/mafia_transformer/token_game_interface.py (apply_action method, KILL action handling)
+- src/mafia_transformer/token_game_interface.py (_is_private_action, _get_public_result_for_private_action)
+- Add tests to verify no duplicate action sequences
+
+Specific fixes:
+- Line ~850-950 in apply_action: fix duplicate KILL action logic
+- Ensure KILL action is recorded once in acting player's sequence
+- Ensure KILLED result is broadcast to all players only once
+- Review private vs public action handling separation
+
+## 5. Add Missing Night Phase Type Markers [pending]
+### Dependencies: 1.4
+### Description: Implement KILL_PHASE, DON_CHECK_PHASE, and SHERIFF_CHECK_PHASE markers to guide agents
+### Details:
+Bug: Missing KILL_PHASE, DON_CHECK_PHASE and SHERIFF_CHECK_PHASE markers that would help agents understand what type of night action they should perform.
+
+Root Cause: The token vocabulary and game interface don't include specific night phase type markers. Currently, agents only see NIGHT_PHASE_START but don't know what type of night action is expected.
+
+Implementation:
+1. Add new tokens to token_vocab.py: KILL_PHASE, DON_CHECK_PHASE, SHERIFF_CHECK_PHASE
+2. Update TokenID enum with the new phase type tokens
+3. Update TOKEN_NAME_TO_ID and TOKEN_ID_TO_NAME mappings
+4. Update VOCAB_SIZE to reflect new tokens
+5. Implement phase type detection logic in token_game_interface.py
+6. Add phase type markers in get_observation_tokens() based on active player's role
+7. Ensure legal action masking works with new tokens
+8. Add comprehensive tests for new phase type markers
+
+Files to modify:
+- src/mafia_transformer/token_vocab.py (add new TokenID enum values, update mappings)
+- src/mafia_transformer/token_game_interface.py (add phase type detection, update get_observation_tokens)
+- src/mafia_transformer/legal_mask.py (handle new tokens if needed)
+- Add tests for new phase type markers
+
+Specific implementation:
+- Add TokenID.KILL_PHASE = 58, DON_CHECK_PHASE = 59, SHERIFF_CHECK_PHASE = 60
+- Update VOCAB_SIZE from 58 to 61
+- Add logic to emit appropriate phase marker based on current player's role during night phases
+
+## 6. Comprehensive Integration Testing of Token Sequence Fixes [pending]
+### Dependencies: 1.5
+### Description: Create comprehensive tests to validate all token sequence bug fixes work together correctly
+### Details:
+Integration Task: Ensure all 5 token sequence bug fixes work together without regressions and create comprehensive test suite.
+
+Implementation:
+1. Create comprehensive UAT test that reproduces the original seed 42, random 557 scenario
+2. Verify phase detection logic correctly identifies voting vs revote phases
+3. Verify vote revelation works correctly after voting rounds complete
+4. Verify all actions properly end with END_TURN tokens
+5. Verify no duplicate action sequences appear
+6. Verify night phase type markers appear correctly for different roles
+7. Create regression tests for each of the 5 fixed bugs
+8. Update existing tests that may be affected by the changes
+9. Run full test suite to ensure no regressions
+10. Document the fixes and expected token sequences
+
+Files to create/modify:
+- test/test_mafia_transformer/test_token_sequence_bug_fixes.py (new comprehensive test)
+- Update existing UAT tests to validate fixes
+- Update documentation with correct token sequence examples
+- Add specific test cases for each bug scenario
+
+Test scenarios:
+- Initial voting phase without incorrect REVOTE_PHASE tokens
+- Voting round completion with proper vote revelation
+- Night actions with proper END_TURN tokens
+- No duplicate KILL action sequences
+- Correct night phase type markers (KILL_PHASE, DON_CHECK_PHASE, SHERIFF_CHECK_PHASE)
+- Full game simulation from start to finish with all fixes applied
+
+Success criteria:
+- All 5 original bugs are fixed
+- No regressions in existing functionality
+- Clean, understandable token sequences
+- Agents can properly understand game state from tokens
+
+## 7. Create Deterministic Unit Test for Seed 42 Random 557 Scenario [pending]
+### Dependencies: 1.6
+### Description: Create a comprehensive unit test that reproduces the exact game scenario from seed 42 and random seed 557 for efficient bug fix validation
+### Details:
+Requirement: Create a deterministic unit test that reproduces the exact same game scenario as `python run_client_server_uat.py --seed 42 --random-seed 557` but as a fast-running unit test for comprehensive validation of all token sequence bug fixes.
+
+Implementation:
+1. Create test/test_mafia_transformer/test_seed_42_random_557_scenario.py
+2. Implement test_seed_42_random_557_token_sequence_validation() that:
+   - Initializes TokenGameInterface with seed=42
+   - Uses deterministic random agent with random_seed=557
+   - Runs the complete game simulation to completion
+   - Validates all 5 bug fixes are working correctly
+   - Captures and validates token sequences at key points
+3. Specific validations to include:
+   - Initial voting phase does NOT contain incorrect REVOTE_PHASE tokens
+   - Vote revelation appears correctly after voting rounds complete
+   - All night actions end with END_TURN tokens
+   - No duplicate KILL action sequences appear
+   - Night phase type markers (KILL_PHASE, DON_CHECK_PHASE, SHERIFF_CHECK_PHASE) appear correctly
+4. Make the test fast and deterministic:
+   - Use TokenGameInterface directly (not client-server architecture)
+   - Deterministic random agents based on random_seed=557
+   - Complete game in seconds, not minutes
+   - Reproducible results every time
+5. Golden master comparison:
+   - Store expected token sequences as test fixtures
+   - Compare actual vs expected sequences for regression detection
+   - Fail fast if any sequence deviates from expected pattern
+
+Files to create:
+- test/test_mafia_transformer/test_seed_42_random_557_scenario.py (main test file)
+- test/fixtures/seed_42_random_557_expected_sequences.json (golden master data)
+- Helper functions for deterministic random agent simulation
+
+Success criteria:
+- Test runs in under 10 seconds
+- Reproduces exact same game flow as original UAT
+- Validates all 5 bug fixes are working
+- Can be run repeatedly with pytest for regression testing
+- Provides clear failure messages when bugs are detected
+

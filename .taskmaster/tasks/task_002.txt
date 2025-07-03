@@ -1,0 +1,37 @@
+# Task ID: 2
+# Title: Build Token-Based Gym Wrapper Around Existing Engine
+# Status: pending
+# Dependencies: 1.2, 1.3
+# Priority: high
+# Description: Create a Gym-compatible wrapper around the existing CompleteGameState that exposes token-based observations and actions using the token encoding/decoding utilities and legal action masking from Task 1
+# Details:
+Build TokenMafiaEnv class that wraps src/mafia_game/game_state.py CompleteGameState. Utilize token encoding utilities to convert Action classes to token sequences and token decoding to convert back. Use legal mask generation with existing get_available_actions() logic. Integrate with 50-token vocabulary from specification. Implement seat rotation for permutation invariance (current speaker always PLAYER_0). Target: 10k random games in <30 seconds.
+
+# Test Strategy:
+Performance benchmarks, token conversion accuracy tests using Task 1 utilities, integration with existing game logic, seat rotation validation, legal mask correctness
+
+# Subtasks:
+## 1. Create TokenMafiaEnv Wrapper Class [pending]
+### Dependencies: None
+### Description: Build main wrapper class with Gym-style step/reset interface around CompleteGameState, integrating with token utilities from Task 1
+### Details:
+
+
+## 2. Implement Observation Encoding [pending]
+### Dependencies: 2.1
+### Description: Convert CompleteGameState to {public_tokens, private_tokens, legal_mask} format using token encoding utilities and legal mask generation from Task 1, with seat rotation
+### Details:
+
+
+## 3. Implement Action Conversion [pending]
+### Dependencies: 2.1
+### Description: Use token decoding utilities from Task 1 to convert token actions back to Action class instances for game engine execution
+### Details:
+
+
+## 4. Optimize Performance [pending]
+### Dependencies: 2.2, 2.3
+### Description: Profile and optimize to achieve 10k games in <30 seconds target, leveraging efficient token utilities from Task 1
+### Details:
+
+

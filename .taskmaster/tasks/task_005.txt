@@ -1,0 +1,37 @@
+# Task ID: 5
+# Title: Implement Transformer Policy Network
+# Status: pending
+# Dependencies: 1
+# Priority: high
+# Description: Build transformer architecture (6 layers × 256 hidden × 8 heads) with factorized action space for token-based observations
+# Details:
+Implement transformer that accepts {public_tokens, private_tokens, legal_mask} observations using 50-token vocabulary. Factorized action space with separate verb and target heads. Legal action masking, seat rotation handling, shared weights between roles, policy+value heads for actor-critic.
+
+# Test Strategy:
+Network architecture validation, legal masking correctness, gradient flow verification, inference speed benchmarks
+
+# Subtasks:
+## 1. Build Core Transformer Architecture [pending]
+### Dependencies: None
+### Description: Implement 6-layer transformer with 256 hidden dimensions and 8 attention heads
+### Details:
+
+
+## 2. Implement Factorized Action Heads [pending]
+### Dependencies: 5.1
+### Description: Create separate policy heads for verb selection and target selection
+### Details:
+
+
+## 3. Add Legal Action Masking [pending]
+### Dependencies: 5.2
+### Description: Implement masking mechanism that sets illegal actions to -inf before softmax
+### Details:
+
+
+## 4. Implement Value Head and Training Features [pending]
+### Dependencies: 5.3
+### Description: Add value head for actor-critic training and gradient clipping for stability
+### Details:
+
+
